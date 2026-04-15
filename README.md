@@ -117,6 +117,24 @@ Checks for contradictions, orphan pages, stale claims, missing cross-references,
 | Code | `.py`, `.js`, `.ts`, `.rs`, etc. | Direct read |
 | Data | `.csv`, `.json`, `.yaml` | Direct read |
 
+## Build Static Website
+
+Generate a browsable static site from your wiki with an interactive D3.js knowledge graph:
+
+```bash
+./scripts/build-site.sh
+```
+
+This creates a `website/` folder with:
+- **Landing page** — Full-screen D3 force-directed graph with all wiki pages as nodes
+- **Right-click panel** — Right-click any node to preview the wiki entry in a slide-out panel
+- **Category pages** — Dedicated pages for Concepts, Entities, Sources, and Comparisons with D3 bubble charts and timelines
+- **Individual pages** — HTML version of each wiki entry with related page links
+
+Node sizes are scaled across 5 tiers based on how frequently a page is referenced (inbound link count). Edge thickness reflects connection strength (number of shared sources between connected pages).
+
+Optionally specify custom paths: `./scripts/build-site.sh wiki/ output/`
+
 ## Development
 
 ```bash
