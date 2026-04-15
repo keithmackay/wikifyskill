@@ -20,7 +20,7 @@ Quick reference guide to the implementation roadmap. See `IMPLEMENTATION_PLAN.md
 
 ---
 
-## Phase 0: Project Scaffolding 🔲 Not Started
+## Phase 0: Project Scaffolding ✅ Complete
 
 **Goal**: Set up repo structure, testing framework, and install/uninstall scripts.
 
@@ -34,7 +34,7 @@ Quick reference guide to the implementation roadmap. See `IMPLEMENTATION_PLAN.md
 
 ---
 
-## Phase 1: WIKI_SCHEMA.md Template 🔲 Not Started
+## Phase 1: WIKI_SCHEMA.md Template ✅ Complete
 
 **Goal**: Create the schema template generated during Init.
 
@@ -46,7 +46,7 @@ Quick reference guide to the implementation roadmap. See `IMPLEMENTATION_PLAN.md
 
 ---
 
-## Phase 2: Skill File — Init Workflow 🔲 Not Started
+## Phase 2: Skill File — Init Workflow ✅ Complete
 
 **Goal**: Create the main skill file with auto-detection and Init workflow.
 
@@ -60,7 +60,7 @@ Quick reference guide to the implementation roadmap. See `IMPLEMENTATION_PLAN.md
 
 ---
 
-## Phase 3: Ingest Workflow 🔲 Not Started
+## Phase 3: Ingest Workflow ✅ Complete
 
 **Goal**: Add the Ingest workflow — the core operation.
 
@@ -73,7 +73,7 @@ Quick reference guide to the implementation roadmap. See `IMPLEMENTATION_PLAN.md
 
 ---
 
-## Phase 4: Query Workflow 🔲 Not Started
+## Phase 4: Query Workflow ✅ Complete
 
 **Goal**: Add the Query workflow for answering questions from compiled wiki.
 
@@ -85,7 +85,7 @@ Quick reference guide to the implementation roadmap. See `IMPLEMENTATION_PLAN.md
 
 ---
 
-## Phase 5: Lint Workflow 🔲 Not Started
+## Phase 5: Lint Workflow ✅ Complete
 
 **Goal**: Add the Lint workflow for wiki health checks.
 
@@ -97,7 +97,7 @@ Quick reference guide to the implementation roadmap. See `IMPLEMENTATION_PLAN.md
 
 ---
 
-## Phase 6: Polish and Documentation 🔲 Not Started
+## Phase 6: Polish and Documentation ✅ Complete
 
 **Goal**: Edge cases, docs, license, final verification.
 
