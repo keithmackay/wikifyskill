@@ -171,7 +171,7 @@ cd "$TMPDIR_TEST"
 # Verify output structure
 assert_file_exists "$WEBSITE_DIR/index.html" "website/index.html generated"
 assert_file_exists "$WEBSITE_DIR/data.json" "website/data.json generated"
-assert_file_exists "$WEBSITE_DIR/styles.css" "website/styles.css generated"
+assert_file_exists "$WEBSITE_DIR/wiki-css.css" "website/wiki-css.css generated"
 assert_file_exists "$WEBSITE_DIR/graph.js" "website/graph.js generated"
 assert_file_exists "$WEBSITE_DIR/category.js" "website/category.js generated"
 assert_file_exists "$WEBSITE_DIR/categories/concepts.html" "categories/concepts.html generated"
@@ -214,6 +214,26 @@ assert_contains "$WEBSITE_DIR/categories/entities.html" "Andrej Karpathy" "entit
 # Verify individual pages
 assert_contains "$WEBSITE_DIR/pages/machine-learning.html" "Machine Learning" "ML page has title"
 assert_contains "$WEBSITE_DIR/pages/machine-learning.html" "concept" "ML page shows type"
+assert_contains "$WEBSITE_DIR/pages/machine-learning.html" "wiki-css.css" "ML page references wiki-css.css"
+
+# Verify wiki-css.css content (taste-skill design tokens)
+assert_contains "$WEBSITE_DIR/wiki-css.css" "Outfit" "wiki-css.css uses Outfit font"
+assert_contains "$WEBSITE_DIR/wiki-css.css" "--color-bg" "wiki-css.css has color-bg token"
+assert_contains "$WEBSITE_DIR/wiki-css.css" "--color-concept" "wiki-css.css has concept color token"
+assert_contains "$WEBSITE_DIR/wiki-css.css" "--font-sans" "wiki-css.css has font-sans token"
+assert_contains "$WEBSITE_DIR/wiki-css.css" "--ease-spring" "wiki-css.css has spring easing"
+assert_contains "$WEBSITE_DIR/wiki-css.css" "cubic-bezier" "wiki-css.css uses custom cubic-bezier"
+assert_contains "$WEBSITE_DIR/wiki-css.css" "JetBrains Mono" "wiki-css.css has monospace font"
+assert_contains "$WEBSITE_DIR/wiki-css.css" "fadeInUp" "wiki-css.css has scroll entry animation"
+
+# Verify CSS is NOT regenerated on second run (preserves customizations)
+echo "/* user customization */" >> "$WEBSITE_DIR/wiki-css.css"
+cd "$TMPDIR_TEST"
+"$SCRIPT" 2>/dev/null
+assert_contains "$WEBSITE_DIR/wiki-css.css" "user customization" "wiki-css.css preserved on rebuild"
+
+# Verify graph.js reads CSS custom properties
+assert_contains "$WEBSITE_DIR/graph.js" "getComputedStyle\|--color-concept" "graph.js reads colors from CSS tokens"
 
 # Clean up
 rm -rf "$TMPDIR_TEST"

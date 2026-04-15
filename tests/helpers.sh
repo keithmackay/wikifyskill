@@ -7,7 +7,7 @@ assert_contains() {
   local file="$1"
   local pattern="$2"
   local description="$3"
-  if grep -q "$pattern" "$file" 2>/dev/null; then
+  if grep -q -- "$pattern" "$file" 2>/dev/null; then
     echo "  PASS: $description"
     PASSES=$((PASSES + 1))
   else
@@ -21,7 +21,7 @@ assert_not_contains() {
   local file="$1"
   local pattern="$2"
   local description="$3"
-  if grep -q "$pattern" "$file" 2>/dev/null; then
+  if grep -q -- "$pattern" "$file" 2>/dev/null; then
     echo "  FAIL: $description"
     echo "        Did not expect '$pattern' in $file"
     FAILURES=$((FAILURES + 1))

@@ -13,7 +13,19 @@ if [ ! -d "$WIKI_DIR" ]; then
   exit 1
 fi
 
-rm -rf "$WEBSITE_DIR"
+# Clean generated files but preserve wiki-css.css (user may have customized it)
+if [ -d "$WEBSITE_DIR" ]; then
+  # Save wiki-css.css if it exists
+  if [ -f "$WEBSITE_DIR/wiki-css.css" ]; then
+    cp "$WEBSITE_DIR/wiki-css.css" "$WEBSITE_DIR/wiki-css.css.bak"
+  fi
+  rm -rf "$WEBSITE_DIR/categories" "$WEBSITE_DIR/pages" "$WEBSITE_DIR/data.json" \
+         "$WEBSITE_DIR/graph.js" "$WEBSITE_DIR/category.js" "$WEBSITE_DIR/index.html"
+  # Restore wiki-css.css
+  if [ -f "$WEBSITE_DIR/wiki-css.css.bak" ]; then
+    mv "$WEBSITE_DIR/wiki-css.css.bak" "$WEBSITE_DIR/wiki-css.css"
+  fi
+fi
 mkdir -p "$WEBSITE_DIR/categories" "$WEBSITE_DIR/pages"
 
 TMPWORK=$(mktemp -d)
@@ -271,84 +283,433 @@ printf '\n  ]\n}\n' >> "$WEBSITE_DIR/data.json"
 
 echo "Generated data.json with $PAGE_COUNT nodes and $EDGE_COUNT edges."
 
-# --- Write styles.css ---
-cat > "$WEBSITE_DIR/styles.css" << 'ENDCSS'
-* { margin: 0; padding: 0; box-sizing: border-box; }
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  background: #0d1117; color: #c9d1d9; overflow: hidden;
+# --- Generate wiki-css.css (only on first run, preserves user customizations) ---
+if [ ! -f "$WEBSITE_DIR/wiki-css.css" ]; then
+  echo "Generating wiki-css.css (first run)..."
+  cat > "$WEBSITE_DIR/wiki-css.css" << 'ENDCSS'
+/* wiki-css.css — Design tokens and styles for wikifyskill static site.
+ * Generated on first build. Edit freely — the build script will not overwrite.
+ * Design language: Ethereal Glass (taste-skill) with minimalist typography.
+ */
+
+/* ── Fonts ── */
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  /* ── Color Tokens ── */
+  --color-bg:            #050505;
+  --color-surface:       #0f1115;
+  --color-surface-hover: #161a1f;
+  --color-border:        rgba(255,255,255,0.08);
+  --color-border-hover:  rgba(255,255,255,0.16);
+  --color-text:          #e1e4e8;
+  --color-text-muted:    #7a818a;
+  --color-text-heading:  #f0f3f6;
+  --color-accent:        #6cb4ee;
+  --color-accent-hover:  #8dc8f8;
+
+  /* ── Category Colors ── */
+  --color-concept:         #5b9bd5;
+  --color-concept-bg:      rgba(91,155,213,0.12);
+  --color-entity:          #66c29a;
+  --color-entity-bg:       rgba(102,194,154,0.12);
+  --color-source-summary:       #d4a054;
+  --color-source-summary-bg:    rgba(212,160,84,0.12);
+  --color-comparison:      #9a7ec4;
+  --color-comparison-bg:   rgba(154,126,196,0.12);
+
+  /* ── Typography ── */
+  --font-sans:     'Outfit', 'Satoshi', 'Cabinet Grotesk', system-ui, sans-serif;
+  --font-mono:     'JetBrains Mono', 'Geist Mono', 'SF Mono', monospace;
+  --tracking-tight: -0.025em;
+  --tracking-wide:  0.05em;
+  --leading-tight:  1.15;
+  --leading-body:   1.65;
+
+  /* ── Spacing ── */
+  --nav-height:    52px;
+  --container-max: 1100px;
+  --page-max:      780px;
+  --radius-sm:     6px;
+  --radius-md:     10px;
+  --radius-lg:     16px;
+  --radius-xl:     24px;
+
+  /* ── Shadows ── */
+  --shadow-panel:   -6px 0 32px rgba(0,0,0,0.5);
+  --shadow-tooltip: 0 12px 32px rgba(0,0,0,0.55);
+  --shadow-card:    0 1px 3px rgba(0,0,0,0.2), 0 0 0 1px var(--color-border);
+  --shadow-card-hover: 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px var(--color-border-hover);
+
+  /* ── Transitions ── */
+  --ease-out:  cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.32, 0.72, 0, 1);
+  --duration-fast: 180ms;
+  --duration-normal: 280ms;
+  --duration-slow: 450ms;
 }
-body.page-body { overflow: auto; }
+
+/* ── Reset ── */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+/* ── Base ── */
+body {
+  font-family: var(--font-sans);
+  font-weight: 400;
+  font-size: 15px;
+  line-height: var(--leading-body);
+  color: var(--color-text);
+  background: var(--color-bg);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body.page-body {
+  overflow: auto;
+  min-height: 100dvh;
+}
+
+/* ── Navigation ── */
 nav {
   position: fixed; top: 0; left: 0; right: 0; z-index: 100;
-  background: rgba(13,17,23,0.95); border-bottom: 1px solid #30363d;
-  padding: 10px 20px; display: flex; align-items: center; gap: 20px;
-  backdrop-filter: blur(10px);
+  height: var(--nav-height);
+  background: rgba(5,5,5,0.85);
+  border-bottom: 1px solid var(--color-border);
+  padding: 0 24px;
+  display: flex; align-items: center; gap: 8px;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
 }
-nav .logo { font-size: 18px; font-weight: 700; color: #58a6ff; text-decoration: none; }
-nav a { color: #8b949e; text-decoration: none; font-size: 14px; padding: 4px 12px; border-radius: 6px; transition: all 0.2s; }
-nav a:hover, nav a.active { color: #c9d1d9; background: #21262d; }
-#graph-container { width: 100vw; height: 100vh; padding-top: 48px; }
+
+nav .logo {
+  font-size: 16px; font-weight: 600;
+  color: var(--color-text-heading);
+  text-decoration: none;
+  letter-spacing: var(--tracking-tight);
+  margin-right: 16px;
+}
+
+nav a {
+  color: var(--color-text-muted);
+  text-decoration: none;
+  font-size: 13px; font-weight: 500;
+  padding: 5px 14px;
+  border-radius: 9999px;
+  transition: color var(--duration-fast) var(--ease-out),
+              background var(--duration-fast) var(--ease-out);
+}
+
+nav a:hover {
+  color: var(--color-text);
+  background: rgba(255,255,255,0.06);
+}
+
+nav a.active {
+  color: var(--color-text-heading);
+  background: rgba(255,255,255,0.1);
+}
+
+/* ── Graph ── */
+#graph-container {
+  width: 100vw;
+  height: 100dvh;
+  padding-top: var(--nav-height);
+}
+
+/* ── Tooltip ── */
 .tooltip {
-  position: absolute; background: #161b22; border: 1px solid #30363d; border-radius: 8px;
-  padding: 10px 14px; font-size: 13px; pointer-events: none; opacity: 0; transition: opacity 0.15s;
-  max-width: 280px; box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  position: absolute;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
+  font-size: 13px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-out);
+  max-width: 300px;
+  box-shadow: var(--shadow-tooltip);
 }
-.tooltip .tt-title { font-weight: 600; color: #f0f6fc; margin-bottom: 4px; }
-.tooltip .tt-type { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.7; }
-.tooltip .tt-confidence { font-size: 11px; margin-top: 4px; opacity: 0.6; }
+
+.tooltip .tt-title {
+  font-weight: 600; font-size: 14px;
+  color: var(--color-text-heading);
+  margin-bottom: 4px;
+  letter-spacing: var(--tracking-tight);
+}
+
+.tooltip .tt-type {
+  font-size: 10px; font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+}
+
+.tooltip .tt-confidence {
+  font-size: 11px; margin-top: 6px;
+  color: var(--color-text-muted);
+}
+
+/* ── Side Panel ── */
 #side-panel {
-  position: fixed; top: 48px; right: 0; width: 420px; height: calc(100vh - 48px);
-  background: #161b22; border-left: 1px solid #30363d; transform: translateX(100%);
-  transition: transform 0.3s ease; overflow-y: auto; z-index: 90; padding: 24px;
-  box-shadow: -4px 0 24px rgba(0,0,0,0.3);
+  position: fixed; top: var(--nav-height); right: 0;
+  width: 440px; height: calc(100dvh - var(--nav-height));
+  background: var(--color-surface);
+  border-left: 1px solid var(--color-border);
+  transform: translateX(100%);
+  transition: transform var(--duration-slow) var(--ease-spring);
+  overflow-y: auto; z-index: 90;
+  padding: 28px;
+  box-shadow: var(--shadow-panel);
 }
+
 #side-panel.open { transform: translateX(0); }
-#side-panel .panel-close { position: absolute; top: 12px; right: 12px; background: none; border: none; color: #8b949e; font-size: 20px; cursor: pointer; }
-#side-panel .panel-close:hover { color: #f0f6fc; }
-#side-panel .panel-meta { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
-#side-panel .panel-body h1 { font-size: 22px; color: #f0f6fc; margin: 16px 0 8px; }
-#side-panel .panel-body h2 { font-size: 18px; color: #f0f6fc; margin: 14px 0 6px; }
-#side-panel .panel-body h3 { font-size: 15px; color: #f0f6fc; margin: 12px 0 4px; }
-#side-panel .panel-body li { margin-left: 20px; margin-bottom: 4px; }
-#side-panel .panel-body code { background: #21262d; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
-#side-panel .panel-body a { color: #58a6ff; }
-#side-panel .panel-body table { border-collapse: collapse; margin: 8px 0; width: 100%; }
-#side-panel .panel-body td { border: 1px solid #30363d; padding: 6px 10px; text-align: left; }
-.panel-link { display: inline-block; margin-top: 12px; color: #58a6ff; text-decoration: none; font-size: 13px; }
-.panel-link:hover { text-decoration: underline; }
-.category-container { max-width: 1100px; margin: 72px auto 40px; padding: 0 24px; }
-.category-header h1 { font-size: 28px; color: #f0f6fc; }
-.category-header .count { font-size: 14px; color: #8b949e; margin-top: 4px; }
-#category-viz { width: 100%; height: 400px; background: #161b22; border: 1px solid #30363d; border-radius: 8px; margin-bottom: 24px; }
+
+#side-panel .panel-close {
+  position: absolute; top: 14px; right: 14px;
+  background: none; border: none;
+  color: var(--color-text-muted);
+  font-size: 18px; cursor: pointer;
+  width: 32px; height: 32px;
+  border-radius: 9999px;
+  display: flex; align-items: center; justify-content: center;
+  transition: background var(--duration-fast) var(--ease-out),
+              color var(--duration-fast) var(--ease-out);
+}
+
+#side-panel .panel-close:hover {
+  color: var(--color-text-heading);
+  background: rgba(255,255,255,0.08);
+}
+
+#side-panel .panel-meta {
+  display: flex; gap: 8px;
+  margin-bottom: 20px; flex-wrap: wrap;
+}
+
+#side-panel .panel-body h1 {
+  font-size: 22px; font-weight: 600;
+  color: var(--color-text-heading);
+  letter-spacing: var(--tracking-tight);
+  line-height: var(--leading-tight);
+  margin: 20px 0 10px;
+}
+
+#side-panel .panel-body h2 {
+  font-size: 17px; font-weight: 600;
+  color: var(--color-text-heading);
+  letter-spacing: var(--tracking-tight);
+  margin: 18px 0 8px;
+}
+
+#side-panel .panel-body h3 {
+  font-size: 14px; font-weight: 600;
+  color: var(--color-text-heading);
+  margin: 14px 0 6px;
+}
+
+#side-panel .panel-body li {
+  margin-left: 20px; margin-bottom: 6px;
+}
+
+#side-panel .panel-body code {
+  background: rgba(255,255,255,0.06);
+  padding: 2px 7px; border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+
+#side-panel .panel-body a { color: var(--color-accent); text-decoration: none; }
+#side-panel .panel-body a:hover { color: var(--color-accent-hover); }
+
+#side-panel .panel-body table { border-collapse: collapse; margin: 10px 0; width: 100%; }
+#side-panel .panel-body td {
+  border: 1px solid var(--color-border);
+  padding: 8px 12px; text-align: left; font-size: 13px;
+}
+
+.panel-link {
+  display: inline-block; margin-top: 16px;
+  color: var(--color-accent);
+  text-decoration: none; font-size: 13px; font-weight: 500;
+  transition: color var(--duration-fast) var(--ease-out);
+}
+.panel-link:hover { color: var(--color-accent-hover); }
+
+/* ── Category Pages ── */
+.category-container {
+  max-width: var(--container-max);
+  margin: calc(var(--nav-height) + 32px) auto 48px;
+  padding: 0 28px;
+}
+
+.category-header h1 {
+  font-size: 32px; font-weight: 700;
+  color: var(--color-text-heading);
+  letter-spacing: var(--tracking-tight);
+  line-height: var(--leading-tight);
+}
+
+.category-header .count {
+  font-size: 13px; font-weight: 500;
+  color: var(--color-text-muted);
+  margin-top: 6px;
+}
+
+#category-viz {
+  width: 100%; height: 400px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  margin-bottom: 28px;
+}
+
 .page-list { list-style: none; }
-.page-list li { padding: 12px 16px; border: 1px solid #30363d; border-radius: 8px; margin-bottom: 8px; background: #161b22; display: flex; justify-content: space-between; align-items: center; transition: border-color 0.2s; }
-.page-list li:hover { border-color: #58a6ff; }
-.page-list a { color: #58a6ff; text-decoration: none; font-weight: 500; }
-.page-list .meta { font-size: 12px; color: #8b949e; display: flex; gap: 12px; }
-.page-container { max-width: 800px; margin: 72px auto 40px; padding: 0 24px; }
-.page-container .page-meta { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
-.badge { font-size: 11px; padding: 2px 8px; border-radius: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
-.badge-concept { background: rgba(74,144,217,0.2); color: #4A90D9; }
-.badge-entity { background: rgba(80,200,120,0.2); color: #50C878; }
-.badge-source-summary { background: rgba(245,166,35,0.2); color: #F5A623; }
-.badge-comparison { background: rgba(155,89,182,0.2); color: #9B59B6; }
-.badge-confidence { background: rgba(139,148,158,0.15); color: #8b949e; }
-.page-container .content h1 { font-size: 26px; color: #f0f6fc; margin: 20px 0 10px; }
-.page-container .content h2 { font-size: 20px; color: #f0f6fc; margin: 16px 0 8px; }
-.page-container .content h3 { font-size: 16px; color: #f0f6fc; margin: 14px 0 6px; }
-.page-container .content li { margin-left: 20px; margin-bottom: 4px; }
-.page-container .content code { background: #21262d; padding: 2px 6px; border-radius: 4px; font-size: 13px; }
-.page-container .content a { color: #58a6ff; }
-.page-container .content table { border-collapse: collapse; margin: 12px 0; width: 100%; }
-.page-container .content td { border: 1px solid #30363d; padding: 8px 12px; text-align: left; }
+
+.page-list li {
+  padding: 14px 18px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  margin-bottom: 8px;
+  background: var(--color-surface);
+  display: flex; justify-content: space-between; align-items: center;
+  transition: border-color var(--duration-fast) var(--ease-out),
+              box-shadow var(--duration-fast) var(--ease-out);
+}
+
+.page-list li:hover {
+  border-color: var(--color-border-hover);
+  box-shadow: var(--shadow-card-hover);
+}
+
+.page-list a {
+  color: var(--color-accent);
+  text-decoration: none; font-weight: 500;
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.page-list a:hover { color: var(--color-accent-hover); }
+
+.page-list .meta {
+  font-size: 12px; font-weight: 500;
+  color: var(--color-text-muted);
+  display: flex; gap: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Individual Pages ── */
+.page-container {
+  max-width: var(--page-max);
+  margin: calc(var(--nav-height) + 32px) auto 48px;
+  padding: 0 28px;
+}
+
+.page-container .page-meta {
+  display: flex; gap: 8px;
+  margin-bottom: 24px; flex-wrap: wrap;
+}
+
+/* ── Badges ── */
+.badge {
+  font-size: 10px; font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+}
+
+.badge-concept       { background: var(--color-concept-bg);    color: var(--color-concept); }
+.badge-entity        { background: var(--color-entity-bg);     color: var(--color-entity); }
+.badge-source-summary { background: var(--color-source-summary-bg); color: var(--color-source-summary); }
+.badge-comparison    { background: var(--color-comparison-bg); color: var(--color-comparison); }
+.badge-confidence    { background: rgba(255,255,255,0.05);     color: var(--color-text-muted); }
+
+/* ── Content Typography ── */
+.page-container .content h1,
+#side-panel .panel-body h1 {
+  font-size: 28px; font-weight: 700;
+  color: var(--color-text-heading);
+  letter-spacing: var(--tracking-tight);
+  line-height: var(--leading-tight);
+  margin: 24px 0 12px;
+}
+
+.page-container .content h2 {
+  font-size: 20px; font-weight: 600;
+  color: var(--color-text-heading);
+  letter-spacing: var(--tracking-tight);
+  margin: 20px 0 10px;
+}
+
+.page-container .content h3 {
+  font-size: 16px; font-weight: 600;
+  color: var(--color-text-heading);
+  margin: 16px 0 8px;
+}
+
+.page-container .content li {
+  margin-left: 22px; margin-bottom: 6px;
+}
+
+.page-container .content code {
+  background: rgba(255,255,255,0.06);
+  padding: 2px 7px; border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.page-container .content a { color: var(--color-accent); text-decoration: none; }
+.page-container .content a:hover { color: var(--color-accent-hover); }
+
+.page-container .content table {
+  border-collapse: collapse;
+  margin: 14px 0; width: 100%;
+}
+
+.page-container .content td {
+  border: 1px solid var(--color-border);
+  padding: 10px 14px; text-align: left; font-size: 14px;
+}
+
+/* ── Scroll Entry Animation ── */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.page-container .content,
+.category-container .page-list li {
+  animation: fadeInUp 600ms var(--ease-out) both;
+}
+
+.category-container .page-list li:nth-child(n) {
+  animation-delay: calc((var(--i, 0)) * 60ms);
+}
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  #side-panel { width: 100%; }
+  .category-container, .page-container { padding: 0 16px; }
+  nav { padding: 0 12px; gap: 4px; }
+  nav a { font-size: 12px; padding: 4px 8px; }
+}
 ENDCSS
+else
+  echo "wiki-css.css exists, preserving customizations."
+fi
 
 # --- Write graph.js ---
 cat > "$WEBSITE_DIR/graph.js" << 'ENDJS'
 // ABOUTME: D3.js force-directed graph for the wikifyskill landing page.
 // ABOUTME: Handles node sizing by tier, edge weight/thickness, hover, right-click panel, drag, zoom.
-const TYPE_COLORS = { 'concept': '#4A90D9', 'entity': '#50C878', 'source-summary': '#F5A623', 'comparison': '#9B59B6' };
+// Read category colors from CSS custom properties for consistency
+const cs = getComputedStyle(document.documentElement);
+const TYPE_COLORS = {
+  'concept': cs.getPropertyValue('--color-concept').trim() || '#5b9bd5',
+  'entity': cs.getPropertyValue('--color-entity').trim() || '#66c29a',
+  'source-summary': cs.getPropertyValue('--color-source-summary').trim() || '#d4a054',
+  'comparison': cs.getPropertyValue('--color-comparison').trim() || '#9a7ec4'
+};
 
 async function initGraph() {
   const data = await (await fetch('data.json')).json();
@@ -433,7 +794,13 @@ ENDJS
 cat > "$WEBSITE_DIR/category.js" << 'ENDJS'
 // ABOUTME: D3.js visualizations for category pages (bubble charts and timelines).
 // ABOUTME: Renders bubble chart sized by source count, colored by confidence.
-const TYPE_COLORS = { 'concept': '#4A90D9', 'entity': '#50C878', 'source-summary': '#F5A623', 'comparison': '#9B59B6' };
+const cs = getComputedStyle(document.documentElement);
+const TYPE_COLORS = {
+  'concept': cs.getPropertyValue('--color-concept').trim() || '#5b9bd5',
+  'entity': cs.getPropertyValue('--color-entity').trim() || '#66c29a',
+  'source-summary': cs.getPropertyValue('--color-source-summary').trim() || '#d4a054',
+  'comparison': cs.getPropertyValue('--color-comparison').trim() || '#9a7ec4'
+};
 const CONF_OP = { 'high': 1.0, 'medium': 0.65, 'low': 0.35 };
 
 async function initCategoryViz(catType) {
@@ -490,7 +857,7 @@ cat > "$WEBSITE_DIR/index.html" << 'ENDHTML'
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Wiki Graph</title>
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="wiki-css.css">
   <script src="https://d3js.org/d3.v7.min.js"></script>
 </head>
 <body>
@@ -547,7 +914,7 @@ gen_category() {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${cat_name} — Wiki</title>
-  <link rel="stylesheet" href="../styles.css">
+  <link rel="stylesheet" href="../wiki-css.css">
   <script src="https://d3js.org/d3.v7.min.js"></script>
 </head>
 <body class="page-body">
@@ -619,7 +986,7 @@ for pid in $PAGE_IDS; do
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${title} — Wiki</title>
-  <link rel="stylesheet" href="../styles.css">
+  <link rel="stylesheet" href="../wiki-css.css">
 </head>
 <body class="page-body">
   <nav>
