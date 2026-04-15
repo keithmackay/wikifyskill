@@ -1,0 +1,52 @@
+name: Bug Report
+description: Report a problem with wikifyskill
+labels: ["bug"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: A clear description of the bug.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: How can we reproduce this?
+      placeholder: |
+        1. Run `/wikify` in a project with...
+        2. Add a file to `raw/`...
+        3. See error...
+    validations:
+      required: true
+  - type: dropdown
+    id: workflow
+    attributes:
+      label: Which workflow?
+      options:
+        - Init
+        - Ingest
+        - Query
+        - Lint
+        - Auto-detection
+        - Install/Uninstall
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Claude Code version, OS, etc.
+      placeholder: |
+        - Claude Code version:
+        - OS:
+    validations:
+      required: false
