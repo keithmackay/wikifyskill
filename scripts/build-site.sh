@@ -1,292 +1,212 @@
-#!/usr/bin/env bash
+#!/usr/bin/env python3
 # ABOUTME: Builds a static website from wiki/ folder with D3.js force graph.
 # ABOUTME: Generates data.json, index.html, category pages, and individual page HTML.
 
-set -e
+import sys
+import os
+import json
+import re
+import shutil
 
-WIKI_DIR="${1:-wiki}"
-WEBSITE_DIR="${2:-website}"
+WIKI_DIR = sys.argv[1] if len(sys.argv) > 1 else "wiki"
+WEBSITE_DIR = sys.argv[2] if len(sys.argv) > 2 else "website"
 
-if [ ! -d "$WIKI_DIR" ]; then
-  echo "Error: wiki directory not found at '$WIKI_DIR'"
-  echo "Usage: build-site.sh [wiki-dir] [output-dir]"
-  exit 1
-fi
+if not os.path.isdir(WIKI_DIR):
+    print(f"Error: wiki directory not found at '{WIKI_DIR}'")
+    print("Usage: build-site.sh [wiki-dir] [output-dir]")
+    sys.exit(1)
 
 # Clean generated files but preserve wiki-css.css (user may have customized it)
-if [ -d "$WEBSITE_DIR" ]; then
-  # Save wiki-css.css if it exists
-  if [ -f "$WEBSITE_DIR/wiki-css.css" ]; then
-    cp "$WEBSITE_DIR/wiki-css.css" "$WEBSITE_DIR/wiki-css.css.bak"
-  fi
-  rm -rf "$WEBSITE_DIR/categories" "$WEBSITE_DIR/pages" "$WEBSITE_DIR/data.json" \
-         "$WEBSITE_DIR/graph.js" "$WEBSITE_DIR/category.js" "$WEBSITE_DIR/index.html"
-  # Restore wiki-css.css
-  if [ -f "$WEBSITE_DIR/wiki-css.css.bak" ]; then
-    mv "$WEBSITE_DIR/wiki-css.css.bak" "$WEBSITE_DIR/wiki-css.css"
-  fi
-fi
-mkdir -p "$WEBSITE_DIR/categories" "$WEBSITE_DIR/pages"
+css_backup = None
+if os.path.isdir(WEBSITE_DIR):
+    css_path = os.path.join(WEBSITE_DIR, "wiki-css.css")
+    if os.path.isfile(css_path):
+        with open(css_path) as f:
+            css_backup = f.read()
+    for name in ["categories", "pages"]:
+        p = os.path.join(WEBSITE_DIR, name)
+        if os.path.isdir(p):
+            shutil.rmtree(p)
+    for name in ["data.json", "graph.js", "category.js", "index.html"]:
+        p = os.path.join(WEBSITE_DIR, name)
+        if os.path.isfile(p):
+            os.remove(p)
 
-TMPWORK=$(mktemp -d)
-trap "rm -rf $TMPWORK" EXIT
+os.makedirs(os.path.join(WEBSITE_DIR, "categories"), exist_ok=True)
+os.makedirs(os.path.join(WEBSITE_DIR, "pages"), exist_ok=True)
 
-# --- Parse frontmatter from a single markdown file ---
-parse_page() {
-  local file="$1"
-  local outfile="$2"
-  local in_fm=0
-  local fm_count=0
-  local title="" type="" confidence="" created="" updated=""
-  local collecting=""
-  local sources="" related=""
-  local body=""
-  local in_body=0
-  local slug
-  slug=$(basename "$file" .md)
 
-  while IFS= read -r line || [ -n "$line" ]; do
-    if [ "$line" = "---" ]; then
-      fm_count=$((fm_count + 1))
-      if [ "$fm_count" -eq 1 ]; then in_fm=1; continue; fi
-      if [ "$fm_count" -eq 2 ]; then in_fm=0; in_body=1; continue; fi
-    fi
-    if [ "$in_fm" -eq 1 ]; then
-      case "$line" in
-        "title: "*) title="${line#title: }"; collecting="" ;;
-        "type: "*) type="${line#type: }"; collecting="" ;;
-        "confidence: "*) confidence="${line#confidence: }"; collecting="" ;;
-        "created: "*) created="${line#created: }"; collecting="" ;;
-        "updated: "*) updated="${line#updated: }"; collecting="" ;;
-        "sources:") collecting="sources" ;;
-        "related:") collecting="related" ;;
-        "  - "*)
-          local val="${line#  - }"
-          if [ "$collecting" = "sources" ]; then
-            sources="${sources:+$sources,}$val"
-          elif [ "$collecting" = "related" ]; then
-            related="${related:+$related,}$val"
-          fi
-          ;;
-        *) collecting="" ;;
-      esac
-    fi
-    if [ "$in_body" -eq 1 ]; then
-      body="${body}${line}
-"
-    fi
-  done < "$file"
+# --- Parse frontmatter from a markdown file ---
+def parse_page(filepath, category):
+    with open(filepath, encoding="utf-8") as f:
+        text = f.read()
 
-  [ -z "$title" ] && return 1
+    slug = os.path.splitext(os.path.basename(filepath))[0]
+    fm, body = {}, ""
+    lines = text.split("\n")
+    i = 0
+    if lines and lines[0].strip() == "---":
+        i = 1
+        collecting = None
+        while i < len(lines):
+            line = lines[i]
+            if line.strip() == "---":
+                i += 1
+                break
+            if line.startswith("title: "):
+                fm["title"] = line[7:].strip(); collecting = None
+            elif line.startswith("type: "):
+                fm["type"] = line[6:].strip(); collecting = None
+            elif line.startswith("confidence: "):
+                fm["confidence"] = line[12:].strip(); collecting = None
+            elif line.startswith("created: "):
+                fm["created"] = line[9:].strip(); collecting = None
+            elif line.startswith("updated: "):
+                fm["updated"] = line[9:].strip(); collecting = None
+            elif line.strip() == "sources:":
+                fm.setdefault("sources", []); collecting = "sources"
+            elif line.strip() == "related:":
+                fm.setdefault("related", []); collecting = "related"
+            elif line.startswith("  - ") and collecting:
+                fm.setdefault(collecting, []).append(line[4:].strip())
+            else:
+                collecting = None
+            i += 1
+        body = "\n".join(lines[i:])
 
-  # Write parsed data to temp files
-  echo "$title" > "$outfile.title"
-  echo "$type" > "$outfile.type"
-  echo "$confidence" > "$outfile.confidence"
-  echo "$created" > "$outfile.created"
-  echo "$updated" > "$outfile.updated"
-  echo "$sources" > "$outfile.sources"
-  echo "$related" > "$outfile.related"
-  echo "$slug" > "$outfile.slug"
-  echo "$body" | md_to_html > "$outfile.body"
-  return 0
-}
+    if "title" not in fm:
+        return None
 
-md_to_html() {
-  sed -E \
-    -e 's/^#### (.+)/<h4>\1<\/h4>/' \
-    -e 's/^### (.+)/<h3>\1<\/h3>/' \
-    -e 's/^## (.+)/<h2>\1<\/h2>/' \
-    -e 's/^# (.+)/<h1>\1<\/h1>/' \
-    -e 's/\*\*([^*]+)\*\*/<strong>\1<\/strong>/g' \
-    -e 's/\*([^*]+)\*/<em>\1<\/em>/g' \
-    -e 's/`([^`]+)`/<code>\1<\/code>/g' \
-    -e 's/\[([^]]+)\]\(([^)]+)\)/<a href="\2">\1<\/a>/g' \
-    -e 's/^- (.+)/<li>\1<\/li>/' \
-    -e '/^$/s/.*/<br>/'
-}
+    return {
+        "slug": slug,
+        "title": fm.get("title", ""),
+        "type": fm.get("type", ""),
+        "confidence": fm.get("confidence", ""),
+        "created": fm.get("created", ""),
+        "updated": fm.get("updated", ""),
+        "sources": fm.get("sources", []),
+        "related": fm.get("related", []),
+        "dir": category,
+        "body": body,
+    }
+
+
+def md_to_html(text):
+    lines = text.split("\n")
+    out = []
+    for line in lines:
+        line = re.sub(r'^#### (.+)', r'<h4>\1</h4>', line)
+        line = re.sub(r'^### (.+)', r'<h3>\1</h3>', line)
+        line = re.sub(r'^## (.+)', r'<h2>\1</h2>', line)
+        line = re.sub(r'^# (.+)', r'<h1>\1</h1>', line)
+        line = re.sub(r'\*\*([^*]+)\*\*', r'<strong>\1</strong>', line)
+        line = re.sub(r'\*([^*]+)\*', r'<em>\1</em>', line)
+        line = re.sub(r'`([^`]+)`', r'<code>\1</code>', line)
+        line = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'<a href="\2">\1</a>', line)
+        line = re.sub(r'^- (.+)', r'<li>\1</li>', line)
+        if line == "":
+            line = "<br>"
+        out.append(line)
+    return "\n".join(out)
+
 
 # --- Collect all pages ---
-echo "Parsing wiki pages..."
-PAGE_COUNT=0
-PAGE_IDS=""
+print("Parsing wiki pages...")
+pages = []
+for category in ["concepts", "entities", "sources", "comparisons"]:
+    cat_dir = os.path.join(WIKI_DIR, category)
+    if not os.path.isdir(cat_dir):
+        continue
+    for fname in sorted(os.listdir(cat_dir)):
+        if not fname.endswith(".md"):
+            continue
+        p = parse_page(os.path.join(cat_dir, fname), category)
+        if p:
+            pages.append(p)
 
-for dir in concepts entities sources comparisons; do
-  if [ -d "$WIKI_DIR/$dir" ]; then
-    for file in "$WIKI_DIR/$dir"/*.md; do
-      [ -f "$file" ] || continue
-      local_id="page_${PAGE_COUNT}"
-      if parse_page "$file" "$TMPWORK/$local_id"; then
-        echo "$dir" > "$TMPWORK/$local_id.dir"
-        PAGE_IDS="${PAGE_IDS} ${local_id}"
-        PAGE_COUNT=$((PAGE_COUNT + 1))
-      fi
-    done
-  fi
-done
+print(f"Found {len(pages)} wiki pages.")
 
-echo "Found $PAGE_COUNT wiki pages."
+# Build slug -> page index for O(1) lookups
+slug_map = {p["slug"]: p for p in pages}
 
 # --- Compute inbound link counts ---
-for pid in $PAGE_IDS; do
-  echo "0" > "$TMPWORK/$pid.inbound"
-done
+for p in pages:
+    p["inbound"] = 0
 
-for pid in $PAGE_IDS; do
-  related=$(cat "$TMPWORK/$pid.related")
-  # Split related on commas using tr
-  echo "$related" | tr ',' '\n' | while read -r rel; do
-    [ -z "$rel" ] && continue
-    rel_slug=$(basename "$rel" .md)
-    for pid2 in $PAGE_IDS; do
-      s2=$(cat "$TMPWORK/$pid2.slug")
-      if [ "$s2" = "$rel_slug" ]; then
-        cur=$(cat "$TMPWORK/$pid2.inbound")
-        echo $((cur + 1)) > "$TMPWORK/$pid2.inbound"
-        break
-      fi
-    done
-  done
-done
+for p in pages:
+    for rel in p["related"]:
+        rel_slug = os.path.splitext(os.path.basename(rel))[0]
+        if rel_slug in slug_map:
+            slug_map[rel_slug]["inbound"] += 1
 
-get_tier() {
-  local count=$1
-  if [ "$count" -le 1 ]; then echo 1
-  elif [ "$count" -le 3 ]; then echo 2
-  elif [ "$count" -le 6 ]; then echo 3
-  elif [ "$count" -le 10 ]; then echo 4
-  else echo 5; fi
-}
 
-get_radius() {
-  case "$1" in
-    1) echo 6 ;; 2) echo 10 ;; 3) echo 16 ;; 4) echo 24 ;; 5) echo 34 ;;
-  esac
-}
+def get_tier(count):
+    if count <= 1: return 1
+    if count <= 3: return 2
+    if count <= 6: return 3
+    if count <= 10: return 4
+    return 5
+
+
+def get_radius(tier):
+    return {1: 6, 2: 10, 3: 16, 4: 24, 5: 34}[tier]
+
 
 # --- Build data.json ---
-echo "Building data.json..."
+print("Building data.json...")
 
-# Nodes
-node_first=1
-printf '{\n  "nodes": [' > "$WEBSITE_DIR/data.json"
+nodes = []
+for p in pages:
+    tier = get_tier(p["inbound"])
+    nodes.append({
+        "id": p["slug"],
+        "title": p["title"],
+        "type": p["type"],
+        "confidence": p["confidence"],
+        "created": p["created"],
+        "tier": tier,
+        "radius": get_radius(tier),
+        "inbound": p["inbound"],
+        "dir": p["dir"],
+    })
 
-for pid in $PAGE_IDS; do
-  slug=$(cat "$TMPWORK/$pid.slug")
-  title=$(cat "$TMPWORK/$pid.title" | sed 's/"/\\"/g')
-  type=$(cat "$TMPWORK/$pid.type")
-  confidence=$(cat "$TMPWORK/$pid.confidence")
-  created=$(cat "$TMPWORK/$pid.created")
-  inbound=$(cat "$TMPWORK/$pid.inbound")
-  dir=$(cat "$TMPWORK/$pid.dir")
-  tier=$(get_tier "$inbound")
-  radius=$(get_radius "$tier")
+edges = []
+seen_edges = set()
+for p in pages:
+    slug_a = p["slug"]
+    sources_a = set(p["sources"])
+    for rel in p["related"]:
+        slug_b = os.path.splitext(os.path.basename(rel))[0]
+        if slug_b not in slug_map:
+            continue
+        edge_key = tuple(sorted([slug_a, slug_b]))
+        if edge_key in seen_edges:
+            continue
+        seen_edges.add(edge_key)
+        sources_b = set(slug_map[slug_b]["sources"])
+        weight = 1 + len(sources_a & sources_b)
+        edges.append({
+            "source": slug_a,
+            "target": slug_b,
+            "weight": weight,
+            "thickness": min(weight, 5),
+        })
 
-  [ "$node_first" -eq 1 ] && node_first=0 || printf ',' >> "$WEBSITE_DIR/data.json"
+with open(os.path.join(WEBSITE_DIR, "data.json"), "w") as f:
+    json.dump({"nodes": nodes, "edges": edges}, f, indent=2)
 
-  cat >> "$WEBSITE_DIR/data.json" << NODEJSON
+print(f"Generated data.json with {len(nodes)} nodes and {len(edges)} edges.")
 
-    {
-      "id": "${slug}",
-      "title": "${title}",
-      "type": "${type}",
-      "confidence": "${confidence}",
-      "created": "${created}",
-      "tier": ${tier},
-      "radius": ${radius},
-      "inbound": ${inbound},
-      "dir": "${dir}"
-    }
-NODEJSON
-done
-
-printf '\n  ],\n  "edges": [' >> "$WEBSITE_DIR/data.json"
-
-# Edges
-EDGE_COUNT=0
-edge_first=1
-echo "" > "$TMPWORK/edge_seen"
-
-for pid in $PAGE_IDS; do
-  slug_a=$(cat "$TMPWORK/$pid.slug")
-  sources_a=$(cat "$TMPWORK/$pid.sources")
-  related=$(cat "$TMPWORK/$pid.related")
-
-  echo "$related" | tr ',' '\n' | while read -r rel; do
-    [ -z "$rel" ] && continue
-    slug_b=$(basename "$rel" .md)
-
-    # Check target exists
-    found_pid=""
-    for pid2 in $PAGE_IDS; do
-      s2=$(cat "$TMPWORK/$pid2.slug")
-      if [ "$s2" = "$slug_b" ]; then
-        found_pid="$pid2"
-        break
-      fi
-    done
-    [ -z "$found_pid" ] && continue
-
-    # Deduplicate
-    edge_key=$(printf '%s\n%s' "$slug_a" "$slug_b" | sort | tr '\n' '-')
-    if grep -q "^${edge_key}$" "$TMPWORK/edge_seen" 2>/dev/null; then
-      continue
-    fi
-    echo "$edge_key" >> "$TMPWORK/edge_seen"
-
-    # Compute weight from shared sources
-    sources_b=$(cat "$TMPWORK/$found_pid.sources")
-    weight=1
-    echo "$sources_a" | tr ',' '\n' | while read -r sa; do
-      [ -z "$sa" ] && continue
-      echo "$sources_b" | tr ',' '\n' | while read -r sb; do
-        [ -z "$sb" ] && continue
-        if [ "$sa" = "$sb" ]; then
-          cur_w=$(cat "$TMPWORK/cur_weight" 2>/dev/null || echo 0)
-          echo $((cur_w + 1)) > "$TMPWORK/cur_weight"
-        fi
-      done
-    done
-    extra_w=$(cat "$TMPWORK/cur_weight" 2>/dev/null || echo 0)
-    rm -f "$TMPWORK/cur_weight"
-    weight=$((weight + extra_w))
-
-    thickness=$weight
-    [ "$thickness" -gt 5 ] && thickness=5
-
-    # Write edge to temp file (subshell can't modify parent vars)
-    cat >> "$TMPWORK/edges_out" << EDGEJSON
-{
-      "source": "${slug_a}",
-      "target": "${slug_b}",
-      "weight": ${weight},
-      "thickness": ${thickness}
-    }
-EDGEJSON
-  done
-done
-
-# Read edges from temp file into data.json
-if [ -f "$TMPWORK/edges_out" ]; then
-  while IFS= read -r eline; do
-    # Skip empty lines
-    [ -z "$eline" ] && continue
-    if echo "$eline" | grep -q '"source"'; then
-      [ "$edge_first" -eq 1 ] && edge_first=0 || printf ',' >> "$WEBSITE_DIR/data.json"
-      EDGE_COUNT=$((EDGE_COUNT + 1))
-    fi
-    printf '\n    %s' "$eline" >> "$WEBSITE_DIR/data.json"
-  done < "$TMPWORK/edges_out"
-fi
-
-printf '\n  ]\n}\n' >> "$WEBSITE_DIR/data.json"
-
-echo "Generated data.json with $PAGE_COUNT nodes and $EDGE_COUNT edges."
-
-# --- Generate wiki-css.css (only on first run, preserves user customizations) ---
-if [ ! -f "$WEBSITE_DIR/wiki-css.css" ]; then
-  echo "Generating wiki-css.css (first run)..."
-  cat > "$WEBSITE_DIR/wiki-css.css" << 'ENDCSS'
+# --- Write wiki-css.css (only on first run, preserves user customizations) ---
+css_path = os.path.join(WEBSITE_DIR, "wiki-css.css")
+if css_backup is not None:
+    with open(css_path, "w") as f:
+        f.write(css_backup)
+    print("wiki-css.css exists, preserving customizations.")
+else:
+    print("Generating wiki-css.css (first run)...")
+    with open(css_path, "w") as f:
+        f.write("""\
 /* wiki-css.css — Design tokens and styles for wikifyskill static site.
  * Generated on first build. Edit freely — the build script will not overwrite.
  * Design language: Ethereal Glass (taste-skill) with minimalist typography.
@@ -693,13 +613,11 @@ nav a.active {
   nav { padding: 0 12px; gap: 4px; }
   nav a { font-size: 12px; padding: 4px 8px; }
 }
-ENDCSS
-else
-  echo "wiki-css.css exists, preserving customizations."
-fi
+""")
 
 # --- Write graph.js ---
-cat > "$WEBSITE_DIR/graph.js" << 'ENDJS'
+with open(os.path.join(WEBSITE_DIR, "graph.js"), "w") as f:
+    f.write("""\
 // ABOUTME: D3.js force-directed graph for the wikifyskill landing page.
 // ABOUTME: Handles node sizing by tier, edge weight/thickness, hover, right-click panel, drag, zoom.
 // Read category colors from CSS custom properties for consistency
@@ -743,7 +661,7 @@ async function initGraph() {
     tooltip.style('opacity', 1).html(
       '<div class="tt-title">' + d.title + '</div>' +
       '<div class="tt-type" style="color:' + TYPE_COLORS[d.type] + '">' + d.type + '</div>' +
-      '<div class="tt-confidence">confidence: ' + d.confidence + ' \u00B7 ' + d.inbound + ' inbound links</div>'
+      '<div class="tt-confidence">confidence: ' + d.confidence + ' \\u00B7 ' + d.inbound + ' inbound links</div>'
     ).style('left', (event.pageX + 14) + 'px').style('top', (event.pageY - 10) + 'px');
     link.attr('stroke-opacity', l => (l.source.id === d.id || l.target.id === d.id) ? 1 : 0.1)
       .attr('stroke', l => (l.source.id === d.id || l.target.id === d.id) ? '#58a6ff' : '#30363d');
@@ -788,10 +706,11 @@ document.addEventListener('click', e => {
   if (p.classList.contains('open') && !p.contains(e.target)) closePanel();
 });
 document.addEventListener('DOMContentLoaded', initGraph);
-ENDJS
+""")
 
 # --- Write category.js ---
-cat > "$WEBSITE_DIR/category.js" << 'ENDJS'
+with open(os.path.join(WEBSITE_DIR, "category.js"), "w") as f:
+    f.write("""\
 // ABOUTME: D3.js visualizations for category pages (bubble charts and timelines).
 // ABOUTME: Renders bubble chart sized by source count, colored by confidence.
 const cs = getComputedStyle(document.documentElement);
@@ -846,11 +765,12 @@ function renderTimeline(el, nodes, w, h) {
   nd.filter(d=>(d.radius||8)>6).append('text').text(d=>d.title.length>20?d.title.substring(0,18)+'...':d.title)
     .attr('text-anchor','middle').attr('dy',(d,i)=>i%2===0?-14:20).attr('fill','#c9d1d9').attr('font-size',11);
 }
-ENDJS
+""")
 
 # --- Generate index.html ---
-echo "Generating index.html..."
-cat > "$WEBSITE_DIR/index.html" << 'ENDHTML'
+print("Generating index.html...")
+with open(os.path.join(WEBSITE_DIR, "index.html"), "w") as f:
+    f.write("""\
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -879,113 +799,82 @@ cat > "$WEBSITE_DIR/index.html" << 'ENDHTML'
   <script src="graph.js"></script>
 </body>
 </html>
-ENDHTML
+""")
 
 # --- Generate category pages ---
-echo "Generating category pages..."
+print("Generating category pages...")
 
-gen_category() {
-  local cat_dir="$1" cat_name="$2" d3_type="$3"
-  local cat_file="$WEBSITE_DIR/categories/${cat_dir}.html"
-  local count=0 list_html=""
+def html_escape(s):
+    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
 
-  for pid in $PAGE_IDS; do
-    ptype=$(cat "$TMPWORK/$pid.type")
-    if [ "$ptype" = "$d3_type" ]; then
-      count=$((count + 1))
-      ptitle=$(cat "$TMPWORK/$pid.title" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
-      pslug=$(cat "$TMPWORK/$pid.slug")
-      pconf=$(cat "$TMPWORK/$pid.confidence")
-      pcreated=$(cat "$TMPWORK/$pid.created")
-      list_html="${list_html}<li><a href=\"../pages/${pslug}.html\">${ptitle}</a><span class=\"meta\"><span>confidence: ${pconf}</span><span>${pcreated}</span></span></li>"
-    fi
-  done
-
-  local active_concepts="" active_entities="" active_sources="" active_comparisons=""
-  case "$cat_dir" in
-    concepts) active_concepts='class="active"' ;; entities) active_entities='class="active"' ;;
-    sources) active_sources='class="active"' ;; comparisons) active_comparisons='class="active"' ;;
-  esac
-
-  cat > "$cat_file" << ENDCATHTML
+def gen_category(cat_dir, cat_name, d3_type):
+    cat_pages = [p for p in pages if p["type"] == d3_type]
+    list_html = "".join(
+        f'<li><a href="../pages/{p["slug"]}.html">{html_escape(p["title"])}</a>'
+        f'<span class="meta"><span>confidence: {p["confidence"]}</span>'
+        f'<span>{p["created"]}</span></span></li>'
+        for p in cat_pages
+    )
+    active = {k: "" for k in ["concepts", "entities", "sources", "comparisons"]}
+    active[cat_dir] = 'class="active"'
+    with open(os.path.join(WEBSITE_DIR, "categories", f"{cat_dir}.html"), "w") as f:
+        f.write(f"""\
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${cat_name} — Wiki</title>
+  <title>{cat_name} — Wiki</title>
   <link rel="stylesheet" href="../wiki-css.css">
   <script src="https://d3js.org/d3.v7.min.js"></script>
 </head>
 <body class="page-body">
   <nav>
     <a href="../index.html" class="logo">Wiki Graph</a>
-    <a href="concepts.html" ${active_concepts}>Concepts</a>
-    <a href="entities.html" ${active_entities}>Entities</a>
-    <a href="sources.html" ${active_sources}>Sources</a>
-    <a href="comparisons.html" ${active_comparisons}>Comparisons</a>
+    <a href="concepts.html" {active["concepts"]}>Concepts</a>
+    <a href="entities.html" {active["entities"]}>Entities</a>
+    <a href="sources.html" {active["sources"]}>Sources</a>
+    <a href="comparisons.html" {active["comparisons"]}>Comparisons</a>
   </nav>
   <div class="category-container">
-    <div class="category-header"><h1>${cat_name}</h1><div class="count">${count} pages</div></div>
+    <div class="category-header"><h1>{cat_name}</h1><div class="count">{len(cat_pages)} pages</div></div>
     <div id="category-viz"></div>
-    <ul class="page-list">${list_html}</ul>
+    <ul class="page-list">{list_html}</ul>
   </div>
   <div class="tooltip"></div>
   <script src="../category.js"></script>
-  <script>initCategoryViz('${d3_type}');</script>
+  <script>initCategoryViz('{d3_type}');</script>
 </body>
 </html>
-ENDCATHTML
-}
+""")
 
-gen_category "concepts" "Concepts" "concept"
-gen_category "entities" "Entities" "entity"
-gen_category "sources" "Sources" "source-summary"
-gen_category "comparisons" "Comparisons" "comparison"
+gen_category("concepts", "Concepts", "concept")
+gen_category("entities", "Entities", "entity")
+gen_category("sources", "Sources", "source-summary")
+gen_category("comparisons", "Comparisons", "comparison")
 
 # --- Generate individual pages ---
-echo "Generating individual pages..."
+print("Generating individual pages...")
+for p in pages:
+    body_html = md_to_html(p["body"])
+    related_html = ""
+    if p["related"]:
+        items = []
+        for rel in p["related"]:
+            rel_slug = os.path.splitext(os.path.basename(rel))[0]
+            rel_title = slug_map[rel_slug]["title"] if rel_slug in slug_map else rel_slug
+            items.append(f'<li><a href="{rel_slug}.html">{html_escape(rel_title)}</a></li>')
+        related_html = "<h3>Related Pages</h3><ul>" + "".join(items) + "</ul>"
 
-for pid in $PAGE_IDS; do
-  slug=$(cat "$TMPWORK/$pid.slug")
-  title=$(cat "$TMPWORK/$pid.title" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
-  type=$(cat "$TMPWORK/$pid.type")
-  confidence=$(cat "$TMPWORK/$pid.confidence")
-  created=$(cat "$TMPWORK/$pid.created")
-  body=$(cat "$TMPWORK/$pid.body")
-  related=$(cat "$TMPWORK/$pid.related")
-
-  related_html=""
-  if [ -n "$related" ]; then
-    related_html="<h3>Related Pages</h3><ul>"
-    # Write related items to temp file to avoid subshell variable scope issues
-    rm -f "$TMPWORK/rel_items"
-    echo "$related" | tr ',' '\n' | while read -r rel; do
-      [ -z "$rel" ] && continue
-      rel_slug=$(basename "$rel" .md)
-      rel_title="$rel_slug"
-      for pid2 in $PAGE_IDS; do
-        s2=$(cat "$TMPWORK/$pid2.slug")
-        if [ "$s2" = "$rel_slug" ]; then
-          rel_title=$(cat "$TMPWORK/$pid2.title")
-          break
-        fi
-      done
-      echo "<li><a href=\"${rel_slug}.html\">${rel_title}</a></li>" >> "$TMPWORK/rel_items"
-    done
-    if [ -f "$TMPWORK/rel_items" ]; then
-      related_html="${related_html}$(cat "$TMPWORK/rel_items")"
-    fi
-    related_html="${related_html}</ul>"
-  fi
-
-  cat > "$WEBSITE_DIR/pages/${slug}.html" << ENDPAGEHTML
+    title_esc = html_escape(p["title"])
+    with open(os.path.join(WEBSITE_DIR, "pages", f'{p["slug"]}.html'), "w") as f:
+        f.write(f"""\
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${title} — Wiki</title>
+  <title>{title_esc} — Wiki</title>
   <link rel="stylesheet" href="../wiki-css.css">
 </head>
 <body class="page-body">
@@ -998,19 +887,17 @@ for pid in $PAGE_IDS; do
   </nav>
   <div class="page-container">
     <div class="page-meta">
-      <span class="badge badge-${type}">${type}</span>
-      <span class="badge badge-confidence">confidence: ${confidence}</span>
-      <span class="badge badge-confidence">${created}</span>
+      <span class="badge badge-{p['type']}">{p['type']}</span>
+      <span class="badge badge-confidence">confidence: {p['confidence']}</span>
+      <span class="badge badge-confidence">{p['created']}</span>
     </div>
-    <div class="content">${body}</div>
-    ${related_html}
+    <div class="content">{body_html}</div>
+    {related_html}
   </div>
 </body>
 </html>
-ENDPAGEHTML
-done
+""")
 
-echo ""
-echo "Site built successfully in $WEBSITE_DIR/"
-echo "  $PAGE_COUNT pages, $EDGE_COUNT edges"
-echo "  Open $WEBSITE_DIR/index.html in a browser to view."
+print(f"\nSite built successfully in {WEBSITE_DIR}/")
+print(f"  {len(pages)} pages, {len(edges)} edges")
+print(f"  Open {WEBSITE_DIR}/index.html in a browser to view.")
