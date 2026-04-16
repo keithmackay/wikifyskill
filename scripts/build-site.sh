@@ -765,7 +765,7 @@ function renderBubble(el, nodes, w, h, catType) {
   const g = svg.append('g').attr('transform', 'translate(20,20)');
   const nd = g.selectAll('g').data(root.leaves()).join('g')
     .attr('transform', d => 'translate('+d.x+','+d.y+')').attr('cursor','pointer')
-    .on('click', (e,d) => { window.location.href='../pages/'+d.data.id+'.html'; });
+    .on('click', (e,d) => { expandItem(d.data.id); });
   nd.append('circle').attr('r', d=>d.r).attr('fill', color)
     .attr('fill-opacity', d=>CONF_OP[d.data.confidence]||0.5).attr('stroke', color).attr('stroke-width', 1);
   nd.filter(d=>d.r>24).append('text').text(d=>d.data.title).attr('text-anchor','middle')
@@ -784,10 +784,25 @@ function renderTimeline(el, nodes, w, h, catType) {
   svg.append('line').attr('x1',m.left).attr('x2',w-m.right).attr('y1',h/2).attr('y2',h/2).attr('stroke','#30363d');
   const nd = svg.selectAll('g.node').data(nodes).join('g')
     .attr('transform',(d,i)=>'translate('+x(new Date(d.created))+','+(h/2+(i%2===0?-40:40))+')')
-    .attr('cursor','pointer').on('click',(e,d)=>{window.location.href='../pages/'+d.id+'.html';});
+    .attr('cursor','pointer').on('click',(e,d)=>{ expandItem(d.id); });
   nd.append('circle').attr('r',d=>d.radius||8).attr('fill',color).attr('fill-opacity',d=>CONF_OP[d.confidence]||0.5);
   nd.filter(d=>(d.radius||8)>6).append('text').text(d=>d.title.length>20?d.title.substring(0,18)+'...':d.title)
     .attr('text-anchor','middle').attr('dy',(d,i)=>i%2===0?-14:20).attr('fill','#c9d1d9').attr('font-size',11);
+}
+
+function expandItem(slug) {
+  document.querySelectorAll('.cat-item').forEach(el => el.classList.remove('expanded'));
+  const item = document.getElementById('item-' + slug);
+  if (!item) return;
+  item.classList.add('expanded');
+  item.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function toggleItem(slug) {
+  const item = document.getElementById('item-' + slug);
+  if (!item) return;
+  if (item.classList.contains('expanded')) item.classList.remove('expanded');
+  else expandItem(slug);
 }
 """)
 
@@ -845,12 +860,22 @@ print("Generating category pages...")
 
 for cat_type in unique_types:
     cat_pages = [p for p in pages if p["type"] == cat_type]
-    list_html = "".join(
-        f'<li><a href="../pages/{p["slug"]}.html">{html_escape(p["title"])}</a>'
-        f'<span class="meta"><span>confidence: {p["confidence"]}</span>'
-        f'<span>{p["created"]}</span></span></li>'
-        for p in cat_pages
-    )
+    list_items = []
+    for p in cat_pages:
+        body_html = md_to_html(p["body"])
+        list_items.append(
+            f'<li id="item-{p["slug"]}" class="cat-item">'
+            f'<div class="cat-item-header" onclick="toggleItem(\'{p["slug"]}\')">'
+            f'<a class="cat-item-title" href="../pages/{p["slug"]}.html" onclick="event.stopPropagation()">{html_escape(p["title"])}</a>'
+            f'<span class="meta">'
+            f'<span>confidence: {p["confidence"]}</span>'
+            f'<span>{p["created"]}</span>'
+            f'<span class="cat-item-arrow">&#9654;</span>'
+            f'</span></div>'
+            f'<div class="cat-item-body content">{body_html}</div>'
+            f'</li>'
+        )
+    list_html = "\n".join(list_items)
     cat_name = cat_type.replace("-", " ").title()
     nav_html = make_nav(unique_types, type_colors, active_type=cat_type, depth=1)
     with open(os.path.join(WEBSITE_DIR, "categories", f"{cat_type}.html"), "w") as f:
@@ -864,15 +889,111 @@ for cat_type in unique_types:
   <link rel="stylesheet" href="../wiki-css.css">
   <script src="https://d3js.org/d3.v7.min.js"></script>
   <script src="../data.js"></script>
+  <style>
+    .cat-layout {{
+      display: flex;
+      gap: 24px;
+      align-items: flex-start;
+      margin-top: calc(var(--nav-height) + 24px);
+      padding: 0 28px 48px;
+      max-width: var(--container-max);
+      margin-left: auto;
+      margin-right: auto;
+    }}
+    .cat-list {{
+      flex: 0 0 42%;
+      max-height: calc(100dvh - var(--nav-height) - 80px);
+      overflow-y: auto;
+      padding-right: 8px;
+    }}
+    .cat-chart {{
+      flex: 1;
+      position: sticky;
+      top: calc(var(--nav-height) + 16px);
+    }}
+    #category-viz {{
+      height: calc(100dvh - var(--nav-height) - 80px);
+      margin-bottom: 0;
+    }}
+    .cat-item {{
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      margin-bottom: 6px;
+      background: var(--color-surface);
+      transition: border-color 180ms;
+    }}
+    .cat-item:hover {{ border-color: var(--color-border-hover); }}
+    .cat-item.expanded {{ border-color: var(--color-border-hover); }}
+    .cat-item-header {{
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 16px;
+      cursor: pointer;
+      gap: 12px;
+    }}
+    .cat-item-title {{
+      color: var(--color-accent);
+      text-decoration: none;
+      font-weight: 500;
+      font-size: 14px;
+      flex: 1;
+    }}
+    .cat-item-title:hover {{ color: var(--color-accent-hover); }}
+    .cat-item-arrow {{
+      color: var(--color-text-muted);
+      font-size: 10px;
+      transition: transform 200ms;
+      display: inline-block;
+    }}
+    .cat-item.expanded .cat-item-arrow {{ transform: rotate(90deg); }}
+    .cat-item-body {{
+      display: none;
+      padding: 0 16px 16px;
+      font-size: 13px;
+      line-height: 1.6;
+      border-top: 1px solid var(--color-border);
+    }}
+    .cat-item.expanded .cat-item-body {{ display: block; }}
+    .cat-header {{
+      padding: 0 0 16px;
+    }}
+    .cat-header h1 {{
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--color-text-heading);
+      letter-spacing: -0.025em;
+    }}
+    .cat-header .count {{
+      font-size: 13px;
+      color: var(--color-text-muted);
+      margin-top: 4px;
+    }}
+    @media (max-width: 768px) {{
+      .cat-layout {{ flex-direction: column; padding: 0 16px 48px; }}
+      .cat-list {{ max-height: none; flex: none; width: 100%; }}
+      .cat-chart {{ position: static; width: 100%; }}
+      #category-viz {{ height: 300px; }}
+    }}
+  </style>
 </head>
 <body class="page-body">
   <nav>
     {nav_html}
   </nav>
-  <div class="category-container">
-    <div class="category-header"><h1>{cat_name}</h1><div class="count">{len(cat_pages)} pages</div></div>
-    <div id="category-viz"></div>
-    <ul class="page-list">{list_html}</ul>
+  <div class="cat-layout">
+    <div class="cat-list">
+      <div class="cat-header">
+        <h1>{cat_name}</h1>
+        <div class="count">{len(cat_pages)} pages</div>
+      </div>
+      <ul class="page-list" style="list-style:none;">
+        {list_html}
+      </ul>
+    </div>
+    <div class="cat-chart">
+      <div id="category-viz"></div>
+    </div>
   </div>
   <div class="tooltip"></div>
   <script src="../category.js"></script>
