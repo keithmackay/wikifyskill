@@ -16,6 +16,21 @@ if not os.path.isdir(WIKI_DIR):
     print("Usage: build-site.sh [wiki-dir] [output-dir]")
     sys.exit(1)
 
+# Color palette — first 4 are canonical colors for known types, rest for extras
+PALETTE = [
+    '#5b9bd5',  # concept
+    '#66c29a',  # entity
+    '#d4a054',  # source-summary
+    '#9a7ec4',  # comparison
+    '#e06c75',  # extra
+    '#56b6c2',  # extra
+    '#d19a66',  # extra
+    '#98c379',  # extra
+    '#c678dd',  # extra
+    '#abb2bf',  # extra
+]
+KNOWN_TYPE_ORDER = ['concept', 'entity', 'source-summary', 'comparison']
+
 # Clean generated files but preserve wiki-css.css (user may have customized it)
 css_backup = None
 if os.path.isdir(WEBSITE_DIR):
@@ -27,7 +42,7 @@ if os.path.isdir(WEBSITE_DIR):
         p = os.path.join(WEBSITE_DIR, name)
         if os.path.isdir(p):
             shutil.rmtree(p)
-    for name in ["data.json", "graph.js", "category.js", "index.html"]:
+    for name in ["data.json", "data.js", "graph.js", "category.js", "index.html"]:
         p = os.path.join(WEBSITE_DIR, name)
         if os.path.isfile(p):
             os.remove(p)
@@ -110,19 +125,24 @@ def md_to_html(text):
     return "\n".join(out)
 
 
-# --- Collect all pages ---
+def html_escape(s):
+    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+
+
+# --- Collect all pages from all subdirectories ---
 print("Parsing wiki pages...")
 pages = []
-for category in ["concepts", "entities", "sources", "comparisons"]:
-    cat_dir = os.path.join(WIKI_DIR, category)
-    if not os.path.isdir(cat_dir):
-        continue
-    for fname in sorted(os.listdir(cat_dir)):
-        if not fname.endswith(".md"):
+if os.path.isdir(WIKI_DIR):
+    for category in sorted(os.listdir(WIKI_DIR)):
+        cat_dir = os.path.join(WIKI_DIR, category)
+        if not os.path.isdir(cat_dir):
             continue
-        p = parse_page(os.path.join(cat_dir, fname), category)
-        if p:
-            pages.append(p)
+        for fname in sorted(os.listdir(cat_dir)):
+            if not fname.endswith(".md"):
+                continue
+            p = parse_page(os.path.join(cat_dir, fname), category)
+            if p:
+                pages.append(p)
 
 print(f"Found {len(pages)} wiki pages.")
 
@@ -141,15 +161,34 @@ for p in pages:
 
 
 def get_tier(count):
-    if count <= 1: return 1
-    if count <= 3: return 2
-    if count <= 6: return 3
-    if count <= 10: return 4
-    return 5
+    if count == 0:  return 1
+    if count == 1:  return 2
+    if count <= 3:  return 3
+    if count <= 6:  return 4
+    if count <= 11: return 5
+    if count <= 17: return 6
+    return 7
 
 
 def get_radius(tier):
-    return {1: 6, 2: 10, 3: 16, 4: 24, 5: 34}[tier]
+    return {1: 5, 2: 8, 3: 12, 4: 17, 5: 23, 6: 30, 7: 40}[tier]
+
+
+def get_thickness(weight):
+    """Interpolate thickness from 1 (weight=1) to 15 (weight>=5)."""
+    return round(1.0 + (min(weight, 5) - 1) * 3.5, 1)
+
+
+# --- Determine types and assign colors ---
+def sort_types(type_set):
+    known = [t for t in KNOWN_TYPE_ORDER if t in type_set]
+    extra = sorted(t for t in type_set if t not in KNOWN_TYPE_ORDER)
+    return known + extra
+
+unique_types = sort_types(set(p["type"] for p in pages if p["type"]))
+type_colors = {t: PALETTE[i % len(PALETTE)] for i, t in enumerate(unique_types)}
+
+print(f"Found {len(unique_types)} categories: {', '.join(unique_types)}")
 
 
 # --- Build data.json ---
@@ -189,10 +228,10 @@ for p in pages:
             "source": slug_a,
             "target": slug_b,
             "weight": weight,
-            "thickness": min(weight, 5),
+            "thickness": get_thickness(weight),
         })
 
-data = {"nodes": nodes, "edges": edges}
+data = {"nodes": nodes, "edges": edges, "typeColors": type_colors}
 with open(os.path.join(WEBSITE_DIR, "data.json"), "w") as f:
     json.dump(data, f, indent=2)
 
@@ -236,16 +275,6 @@ else:
   --color-text-heading:  #f0f3f6;
   --color-accent:        #6cb4ee;
   --color-accent-hover:  #8dc8f8;
-
-  /* ── Category Colors ── */
-  --color-concept:         #5b9bd5;
-  --color-concept-bg:      rgba(91,155,213,0.12);
-  --color-entity:          #66c29a;
-  --color-entity-bg:       rgba(102,194,154,0.12);
-  --color-source-summary:       #d4a054;
-  --color-source-summary-bg:    rgba(212,160,84,0.12);
-  --color-comparison:      #9a7ec4;
-  --color-comparison-bg:   rgba(154,126,196,0.12);
 
   /* ── Typography ── */
   --font-sans:     'Outfit', 'Satoshi', 'Cabinet Grotesk', system-ui, sans-serif;
@@ -382,7 +411,8 @@ nav a.active {
 /* ── Side Panel ── */
 #side-panel {
   position: fixed; top: var(--nav-height); right: 0;
-  width: 440px; height: calc(100dvh - var(--nav-height));
+  width: 33vw; min-width: 320px; max-width: 600px;
+  height: calc(100dvh - var(--nav-height));
   background: var(--color-surface);
   border-left: 1px solid var(--color-border);
   transform: translateX(100%);
@@ -547,11 +577,7 @@ nav a.active {
   letter-spacing: var(--tracking-wide);
 }
 
-.badge-concept       { background: var(--color-concept-bg);    color: var(--color-concept); }
-.badge-entity        { background: var(--color-entity-bg);     color: var(--color-entity); }
-.badge-source-summary { background: var(--color-source-summary-bg); color: var(--color-source-summary); }
-.badge-comparison    { background: var(--color-comparison-bg); color: var(--color-comparison); }
-.badge-confidence    { background: rgba(255,255,255,0.05);     color: var(--color-text-muted); }
+.badge-confidence { background: rgba(255,255,255,0.05); color: #7a818a; }
 
 /* ── Content Typography ── */
 .page-container .content h1,
@@ -629,14 +655,7 @@ with open(os.path.join(WEBSITE_DIR, "graph.js"), "w") as f:
     f.write("""\
 // ABOUTME: D3.js force-directed graph for the wikifyskill landing page.
 // ABOUTME: Handles node sizing by tier, edge weight/thickness, hover, right-click panel, drag, zoom.
-// Read category colors from CSS custom properties for consistency
-const cs = getComputedStyle(document.documentElement);
-const TYPE_COLORS = {
-  'concept': cs.getPropertyValue('--color-concept').trim() || '#5b9bd5',
-  'entity': cs.getPropertyValue('--color-entity').trim() || '#66c29a',
-  'source-summary': cs.getPropertyValue('--color-source-summary').trim() || '#d4a054',
-  'comparison': cs.getPropertyValue('--color-comparison').trim() || '#9a7ec4'
-};
+const TYPE_COLORS = (typeof WIKI_DATA !== 'undefined') ? WIKI_DATA.typeColors : {};
 
 async function initGraph() {
   const data = (typeof WIKI_DATA !== 'undefined') ? WIKI_DATA : await (await fetch('data.json')).json();
@@ -663,13 +682,13 @@ async function initGraph() {
     .call(d3.drag().on('start', ds).on('drag', dd).on('end', de));
 
   const labels = g.append('g').selectAll('text').data(data.nodes.filter(d => d.tier >= 3)).join('text')
-    .text(d => d.title).attr('font-size', d => d.tier >= 4 ? 12 : 10).attr('fill', '#c9d1d9')
+    .text(d => d.title).attr('font-size', d => d.tier >= 5 ? 12 : 10).attr('fill', '#c9d1d9')
     .attr('text-anchor', 'middle').attr('dy', d => d.radius + 14).attr('pointer-events', 'none').attr('opacity', 0.8);
 
   node.on('mouseover', function(event, d) {
     tooltip.style('opacity', 1).html(
       '<div class="tt-title">' + d.title + '</div>' +
-      '<div class="tt-type" style="color:' + TYPE_COLORS[d.type] + '">' + d.type + '</div>' +
+      '<div class="tt-type" style="color:' + (TYPE_COLORS[d.type] || '#8b949e') + '">' + d.type + '</div>' +
       '<div class="tt-confidence">confidence: ' + d.confidence + ' \\u00B7 ' + d.inbound + ' inbound links</div>'
     ).style('left', (event.pageX + 14) + 'px').style('top', (event.pageY - 10) + 'px');
     link.attr('stroke-opacity', l => (l.source.id === d.id || l.target.id === d.id) ? 1 : 0.1)
@@ -684,7 +703,9 @@ async function initGraph() {
     tooltip.style('opacity', 0); link.attr('stroke-opacity', 0.6).attr('stroke', '#30363d'); node.attr('opacity', 1);
   });
 
+  // single-click navigates; double-click opens detail panel without leaving graph
   node.on('click', (e, d) => { window.location.href = 'pages/' + d.id + '.html'; });
+  node.on('dblclick', (e, d) => { e.stopPropagation(); openPanel(d); });
   node.on('contextmenu', (e, d) => { e.preventDefault(); openPanel(d); });
 
   simulation.on('tick', () => {
@@ -721,14 +742,8 @@ document.addEventListener('DOMContentLoaded', initGraph);
 with open(os.path.join(WEBSITE_DIR, "category.js"), "w") as f:
     f.write("""\
 // ABOUTME: D3.js visualizations for category pages (bubble charts and timelines).
-// ABOUTME: Renders bubble chart sized by source count, colored by confidence.
-const cs = getComputedStyle(document.documentElement);
-const TYPE_COLORS = {
-  'concept': cs.getPropertyValue('--color-concept').trim() || '#5b9bd5',
-  'entity': cs.getPropertyValue('--color-entity').trim() || '#66c29a',
-  'source-summary': cs.getPropertyValue('--color-source-summary').trim() || '#d4a054',
-  'comparison': cs.getPropertyValue('--color-comparison').trim() || '#9a7ec4'
-};
+// ABOUTME: Renders bubble chart sized by inbound links, colored by confidence.
+const TYPE_COLORS = (typeof WIKI_DATA !== 'undefined') ? WIKI_DATA.typeColors : {};
 const CONF_OP = { 'high': 1.0, 'medium': 0.65, 'low': 0.35 };
 
 async function initCategoryViz(catType) {
@@ -737,7 +752,7 @@ async function initCategoryViz(catType) {
   if (!nodes.length) return;
   const el = document.getElementById('category-viz');
   const w = el.clientWidth, h = el.clientHeight;
-  if (catType === 'source-summary') renderTimeline(el, nodes, w, h);
+  if (catType === 'source-summary') renderTimeline(el, nodes, w, h, catType);
   else renderBubble(el, nodes, w, h, catType);
 }
 
@@ -757,8 +772,8 @@ function renderBubble(el, nodes, w, h, catType) {
     .attr('dy','0.35em').attr('fill','#f0f6fc').attr('font-size', d=>Math.min(d.r/3,14)).attr('pointer-events','none');
 }
 
-function renderTimeline(el, nodes, w, h) {
-  const color = TYPE_COLORS['source-summary'];
+function renderTimeline(el, nodes, w, h, catType) {
+  const color = TYPE_COLORS[catType] || '#8b949e';
   const m = {top:30,right:30,bottom:40,left:30};
   nodes.sort((a,b)=>(a.created||'').localeCompare(b.created||''));
   const svg = d3.select(el).append('svg').attr('width',w).attr('height',h);
@@ -776,10 +791,28 @@ function renderTimeline(el, nodes, w, h) {
 }
 """)
 
+
+# --- Nav and badge helpers ---
+def make_nav(types, type_colors, active_type=None, depth=0):
+    prefix = "../" * depth
+    links = [f'<a href="{prefix}index.html" class="logo">Wiki Graph</a>']
+    for t in types:
+        label = t.replace("-", " ").title()
+        active = ' class="active"' if t == active_type else ""
+        links.append(f'<a href="{prefix}categories/{t}.html"{active}>{label}</a>')
+    return "\n    ".join(links)
+
+
+def badge_html(type_name, type_colors):
+    color = type_colors.get(type_name, "#8b949e")
+    return f'<span class="badge" style="background:{color}1f;color:{color};">{html_escape(type_name)}</span>'
+
+
 # --- Generate index.html ---
 print("Generating index.html...")
+nav_html = make_nav(unique_types, type_colors, depth=0)
 with open(os.path.join(WEBSITE_DIR, "index.html"), "w") as f:
-    f.write("""\
+    f.write(f"""\
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -792,11 +825,7 @@ with open(os.path.join(WEBSITE_DIR, "index.html"), "w") as f:
 </head>
 <body>
   <nav>
-    <a href="index.html" class="logo">Wiki Graph</a>
-    <a href="categories/concepts.html">Concepts</a>
-    <a href="categories/entities.html">Entities</a>
-    <a href="categories/sources.html">Sources</a>
-    <a href="categories/comparisons.html">Comparisons</a>
+    {nav_html}
   </nav>
   <div id="graph-container"></div>
   <div class="tooltip"></div>
@@ -814,20 +843,17 @@ with open(os.path.join(WEBSITE_DIR, "index.html"), "w") as f:
 # --- Generate category pages ---
 print("Generating category pages...")
 
-def html_escape(s):
-    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
-
-def gen_category(cat_dir, cat_name, d3_type):
-    cat_pages = [p for p in pages if p["type"] == d3_type]
+for cat_type in unique_types:
+    cat_pages = [p for p in pages if p["type"] == cat_type]
     list_html = "".join(
         f'<li><a href="../pages/{p["slug"]}.html">{html_escape(p["title"])}</a>'
         f'<span class="meta"><span>confidence: {p["confidence"]}</span>'
         f'<span>{p["created"]}</span></span></li>'
         for p in cat_pages
     )
-    active = {k: "" for k in ["concepts", "entities", "sources", "comparisons"]}
-    active[cat_dir] = 'class="active"'
-    with open(os.path.join(WEBSITE_DIR, "categories", f"{cat_dir}.html"), "w") as f:
+    cat_name = cat_type.replace("-", " ").title()
+    nav_html = make_nav(unique_types, type_colors, active_type=cat_type, depth=1)
+    with open(os.path.join(WEBSITE_DIR, "categories", f"{cat_type}.html"), "w") as f:
         f.write(f"""\
 <!DOCTYPE html>
 <html lang="en">
@@ -841,11 +867,7 @@ def gen_category(cat_dir, cat_name, d3_type):
 </head>
 <body class="page-body">
   <nav>
-    <a href="../index.html" class="logo">Wiki Graph</a>
-    <a href="concepts.html" {active["concepts"]}>Concepts</a>
-    <a href="entities.html" {active["entities"]}>Entities</a>
-    <a href="sources.html" {active["sources"]}>Sources</a>
-    <a href="comparisons.html" {active["comparisons"]}>Comparisons</a>
+    {nav_html}
   </nav>
   <div class="category-container">
     <div class="category-header"><h1>{cat_name}</h1><div class="count">{len(cat_pages)} pages</div></div>
@@ -854,15 +876,10 @@ def gen_category(cat_dir, cat_name, d3_type):
   </div>
   <div class="tooltip"></div>
   <script src="../category.js"></script>
-  <script>initCategoryViz('{d3_type}');</script>
+  <script>initCategoryViz('{cat_type}');</script>
 </body>
 </html>
 """)
-
-gen_category("concepts", "Concepts", "concept")
-gen_category("entities", "Entities", "entity")
-gen_category("sources", "Sources", "source-summary")
-gen_category("comparisons", "Comparisons", "comparison")
 
 # --- Generate individual pages ---
 print("Generating individual pages...")
@@ -878,6 +895,8 @@ for p in pages:
         related_html = "<h3>Related Pages</h3><ul>" + "".join(items) + "</ul>"
 
     title_esc = html_escape(p["title"])
+    type_badge = badge_html(p["type"], type_colors)
+    nav_html = make_nav(unique_types, type_colors, depth=1)
     with open(os.path.join(WEBSITE_DIR, "pages", f'{p["slug"]}.html'), "w") as f:
         f.write(f"""\
 <!DOCTYPE html>
@@ -890,15 +909,11 @@ for p in pages:
 </head>
 <body class="page-body">
   <nav>
-    <a href="../index.html" class="logo">Wiki Graph</a>
-    <a href="../categories/concepts.html">Concepts</a>
-    <a href="../categories/entities.html">Entities</a>
-    <a href="../categories/sources.html">Sources</a>
-    <a href="../categories/comparisons.html">Comparisons</a>
+    {nav_html}
   </nav>
   <div class="page-container">
     <div class="page-meta">
-      <span class="badge badge-{p['type']}">{p['type']}</span>
+      {type_badge}
       <span class="badge badge-confidence">confidence: {p['confidence']}</span>
       <span class="badge badge-confidence">{p['created']}</span>
     </div>
@@ -910,5 +925,5 @@ for p in pages:
 """)
 
 print(f"\nSite built successfully in {WEBSITE_DIR}/")
-print(f"  {len(pages)} pages, {len(edges)} edges")
+print(f"  {len(pages)} pages, {len(edges)} edges, {len(unique_types)} categories")
 print(f"  Open {WEBSITE_DIR}/index.html in a browser to view.")
