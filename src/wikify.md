@@ -4,6 +4,11 @@ description: Build and maintain an LLM-compiled knowledge wiki (Karpathy pattern
 
 # /wikify — LLM Knowledge Wiki
 
+> **build-site.sh** is at `~/.claude/scripts/build-site.sh`. Run it from any wiki project root to generate the D3 website:
+> ```bash
+> python3 ~/.claude/scripts/build-site.sh wiki website
+> ```
+
 You are running the wikify skill. Follow these instructions exactly.
 
 ## Step 1: Detect Context
@@ -14,15 +19,17 @@ Examine the current working directory to determine which workflow to run. Use th
 
 1. **Lint requested**: If the user typed text after `/wikify` and that text contains the word "lint", go to **Lint Workflow**.
 
-2. **Query requested**: If the user typed text after `/wikify` (and it's not "lint"), go to **Query Workflow**.
+2. **Learning plan requested**: If the user typed text after `/wikify` and that text contains the phrase "learning_plan" or "learning plan", go to **Learning Plan Workflow**.
 
-3. **Init needed**: If `WIKI_SCHEMA.md` does not exist in the current directory, go to **Init Workflow**.
+3. **Query requested**: If the user typed text after `/wikify` (and it's not "lint" or "learning_plan"), go to **Query Workflow**.
 
-4. **Inconsistent state**: If only one of `raw/` or `wiki/` exists (but not both), warn the user: "Found [raw/|wiki/] but not [wiki/|raw/]. This looks like an incomplete setup. Would you like to run Init to fix this?" If yes, go to **Init Workflow**.
+4. **Init needed**: If `WIKI_SCHEMA.md` does not exist in the current directory, go to **Init Workflow**.
 
-5. **Ingest available**: If both `raw/` and `wiki/` exist, scan for unprocessed files (see Ingest Workflow Step 1). If new files are found, go to **Ingest Workflow**.
+5. **Inconsistent state**: If only one of `raw/` or `wiki/` exists (but not both), warn the user: "Found [raw/|wiki/] but not [wiki/|raw/]. This looks like an incomplete setup. Would you like to run Init to fix this?" If yes, go to **Init Workflow**.
 
-6. **Nothing to do**: If both directories exist and all files are processed, present this menu:
+6. **Ingest available**: If both `raw/` and `wiki/` exist, scan for unprocessed files (see Ingest Workflow Step 1). If new files are found, go to **Ingest Workflow**.
+
+7. **Nothing to do**: If both directories exist and all files are processed, present this menu:
    - "All sources are processed. What would you like to do?"
    - **Query**: "Ask a question about the wiki (e.g., `/wikify what is X?`)"
    - **Lint**: "Run a health check (e.g., `/wikify lint`)"
@@ -36,50 +43,82 @@ Report which workflow was detected and ask the user to confirm before proceeding
 
 Create the full wiki folder structure and schema files in the current directory.
 
+### Step 0: Determine Categories
+
+Before creating anything, scan `raw/` for existing files to propose domain-appropriate categories.
+
+**Auto-propose categories from raw docs:**
+
+1. Use Glob to list all files under `raw/` recursively.
+2. Read the filenames and (if text files) skim the first 20–50 lines of up to 5 files to detect the domain.
+3. Based on what you find, propose a tailored category list. Examples by domain:
+   - Research/academic corpus → `concepts`, `entities`, `comparisons`, `methods`
+   - Fiction/narrative → `characters`, `locations`, `artifacts`, `factions`, `events`
+   - Technical/software → `concepts`, `tools`, `apis`, `patterns`
+   - Business/strategy → `concepts`, `companies`, `people`, `frameworks`
+   - No files found → use default: `concepts`, `entities`, `comparisons`
+
+Present your proposed list with a one-line rationale for each category based on what you observed in the raw files. Then say:
+
+"These categories are based on the content I found in `raw/`. Confirm this list or give me your own."
+
+Wait for the user's response. Use their confirmed list for all subsequent steps. Always include `sources` regardless of what the user says — it is required and always uses `type: source-summary`.
+
+Store this list as the **category list** for the rest of Init. Each category name is both the subfolder name and the `type` value used in frontmatter for pages in that folder.
+
 ### Step 1: Create Directories
 
-Use the Bash tool to create all directories:
+Use the Bash tool to create all directories. The `raw/` subdirs are always the same. The `wiki/` subdirs come from the category list plus `sources`.
 
 ```bash
 mkdir -p raw/articles raw/papers raw/repos raw/data raw/images raw/assets
-mkdir -p wiki/concepts wiki/entities wiki/sources wiki/comparisons
+mkdir -p wiki/sources wiki/<cat1> wiki/<cat2> ...
 ```
 
 ### Step 2: Create WIKI_SCHEMA.md
 
-Use the Write tool to create `WIKI_SCHEMA.md` in the current directory with the following content:
+Use the Write tool to create `WIKI_SCHEMA.md` with content tailored to the actual categories chosen. The **Categories** section is the authoritative record — all ingest and lint workflows read it.
 
 ```markdown
 # Wiki Schema
 
 This file defines the structure, conventions, and workflows for this LLM-maintained knowledge wiki. Any human or LLM working with this project should read this file first.
 
+## Categories
+
+The `sources` folder is always present and holds one summary page per raw source file (`type: source-summary`). All other categories are listed below — each folder name is the exact value used in the `type` frontmatter field of pages stored there.
+
+- `sources/` → type: `source-summary` *(required, one per raw source file)*
+- `<cat1>/` → type: `<cat1>`
+- `<cat2>/` → type: `<cat2>`
+- ...
+
 ## Project Structure
 
 \```
 raw/                          # Layer 1: Immutable source material (read-only)
-├── articles/                 # Web-clipped articles, blog posts
-├── papers/                   # Academic papers, whitepapers
-├── repos/                    # Source code repositories
-├── data/                     # CSV, JSON, YAML data files
-├── images/                   # Diagrams, screenshots, photos
-└── assets/                   # Other files (audio, video, etc.)
+├── articles/
+├── papers/
+├── repos/
+├── data/
+├── images/
+└── assets/
 
 wiki/                         # Layer 2: LLM-maintained knowledge base
-├── index.md                  # Content catalog (all pages listed by category)
+├── index.md                  # Content catalog
 ├── log.md                    # Chronological processing log
-├── overview.md               # High-level wiki summary and key findings
-├── concepts/                 # Concept pages (ideas, techniques, patterns)
-├── entities/                 # Entity pages (people, orgs, tools, projects)
-├── sources/                  # Source summary pages (one per raw file)
-└── comparisons/              # Comparison pages (side-by-side analysis)
+├── overview.md               # High-level wiki summary
+├── sources/                  # Source summary pages
+├── <cat1>/
+├── <cat2>/
+└── ...
 
-WIKI_SCHEMA.md                # Layer 3: This file (schema and conventions)
+WIKI_SCHEMA.md                # This file
 \```
 
-**`raw/`** is read-only. The LLM reads from these files but never modifies them. This is the single source of truth for all knowledge in the wiki.
+**`raw/`** is read-only. The LLM reads from these files but never modifies them.
 
-**`wiki/`** is LLM-owned. The LLM creates, updates, and maintains all pages. Humans should not edit wiki pages directly — instead, add sources to `raw/` and let the LLM process them.
+**`wiki/`** is LLM-owned. The LLM creates, updates, and maintains all pages.
 
 ## Page Types
 
@@ -87,17 +126,9 @@ WIKI_SCHEMA.md                # Layer 3: This file (schema and conventions)
 
 One per raw source file. Lives in `wiki/sources/`. Summarizes key takeaways, lists extracted entities and concepts, and links back to the raw file. Created during ingest.
 
-### concept
+### <cat1> (and all other categories)
 
-One per significant idea, technique, pattern, or theory. Lives in `wiki/concepts/`. Synthesizes information across multiple sources. Updated whenever a new source touches the concept.
-
-### entity
-
-One per named thing — person, organization, tool, project, framework. Lives in `wiki/entities/`. Aggregates all mentions and context from across sources.
-
-### comparison
-
-Side-by-side analysis of alternatives, tools, or approaches. Lives in `wiki/comparisons/`. Uses tables for structured trade-off analysis. Only created when explicitly warranted by the source material.
+Pages of this type live in `wiki/<cat1>/`. The type value in frontmatter is exactly `<cat1>` — the folder name.
 
 ## Frontmatter Schema
 
@@ -106,108 +137,58 @@ Every wiki page must have YAML frontmatter with these fields:
 \```yaml
 ---
 title: Page Title
-type: concept | entity | source-summary | comparison
+type: source-summary | <cat1> | <cat2> | ...
 sources:
   - ../raw/articles/source-file.md
 related:
-  - concepts/related-concept.md
-  - entities/related-entity.md
+  - <cat1>/related-page.md
+  - sources/related-source.md
 confidence: high | medium | low
-created: 2026-04-15
-updated: 2026-04-15
+created: YYYY-MM-DD
+updated: YYYY-MM-DD
 ---
 \```
 
 **Field definitions:**
 
 - **title:** Human-readable page title
-- **type:** One of `concept`, `entity`, `source-summary`, or `comparison`
+- **type:** Exactly matches the folder name where the page lives (exception: `sources/` uses `source-summary`)
 - **sources:** List of relative paths to raw files this page draws from
 - **related:** List of relative paths to other wiki pages that are related
-- **confidence:** How well-supported the claims are — `high` (multiple corroborating sources), `medium` (single source or partially corroborated), `low` (speculative or from a single unreliable source)
-- **created:** Date the page was first created (YYYY-MM-DD)
-- **updated:** Date the page was last modified (YYYY-MM-DD)
+- **confidence:** `high` (multiple corroborating sources), `medium` (single source), `low` (speculative)
+- **created/updated:** YYYY-MM-DD
 
 ## Naming Conventions
 
 - Filenames use lowercase kebab-case slugs derived from the title
-- Examples: `transformer-architecture.md`, `andrej-karpathy.md`, `react-vs-vue.md`
 - No spaces, no uppercase, no special characters beyond hyphens
-- Slugs should be descriptive but concise
 
 ## Special Files
 
 ### index.md
 
-A categorical catalog of all wiki pages. Organized into sections by type:
-
-\```markdown
-## Sources
-- [Source Title](sources/source-title.md) — type: source-summary, confidence: high
-
-## Concepts
-- [Concept Name](concepts/concept-name.md) — type: concept, confidence: medium
-
-## Entities
-- [Entity Name](entities/entity-name.md) — type: entity, confidence: high
-
-## Comparisons
-- [Comparison Title](comparisons/comparison-title.md) — type: comparison, confidence: medium
-\```
-
-Updated on every ingest operation.
+Catalog organized by category. One section per category (including Sources).
 
 ### log.md
 
-An append-only chronological record of all processing activity:
-
+Append-only chronological record:
 \```markdown
-## [2026-04-15] ingest | Article Title
-- Created: sources/article-title.md
-- Created: concepts/new-concept.md
-- Updated: entities/existing-entity.md
+## [YYYY-MM-DD] ingest | Source Title
+- Source: raw/path/to/file.ext
+- Created: sources/slug.md
+- Created: <cat1>/new-page.md
 \```
-
-Each entry uses the format `## [YYYY-MM-DD] ingest | Source Title` followed by a bullet list of pages created or updated.
 
 ### overview.md
 
-A high-level summary of the wiki's scope, key themes, and major findings. Updated periodically as the wiki grows. Serves as the entry point for understanding what knowledge has been compiled.
-
-## Workflows
-
-### Ingest
-
-When new source files appear in `raw/`, the Ingest workflow:
-1. Identifies unprocessed files by comparing `raw/` contents against `log.md`
-2. Reads each source file using the appropriate method for its type
-3. Presents a summary and discusses takeaways with the human
-4. Creates a source summary page and updates related concept/entity/comparison pages
-5. Updates `index.md` and appends to `log.md`
-6. Ensures bidirectional cross-references across all affected pages
-
-### Query
-
-When the human asks a question, the Query workflow:
-1. Reads `index.md` and `overview.md` to identify relevant pages
-2. Reads the relevant pages and synthesizes an answer with citations
-3. Flags knowledge gaps and suggests sources to fill them
-4. Offers to save the answer as a new wiki page
-
-### Lint
-
-The Lint workflow runs six health checks:
-1. **Contradictions** — Conflicting claims across pages
-2. **Orphan pages** — Pages with zero inbound links
-3. **Stale claims** — Source files modified after their summary was written
-4. **Missing cross-references** — One-directional links that should be bidirectional
-5. **Stub detection** — Concepts mentioned but lacking dedicated pages
-6. **Broken links** — References to files that no longer exist
+High-level summary of wiki scope, themes, and major findings.
 ```
+
+Substitute the actual category names throughout. The Categories section must be kept accurate — it is machine-read by the ingest and lint workflows.
 
 ### Step 3: Create wiki/index.md
 
-Use the Write tool to create `wiki/index.md`:
+Create `wiki/index.md` with one section per category, starting with Sources:
 
 ```markdown
 # Wiki Index
@@ -218,22 +199,16 @@ A catalog of all pages in this knowledge wiki, organized by type.
 
 *No sources ingested yet. Add files to `raw/` and run `/wikify` to begin.*
 
-## Concepts
+## <Cat1 title-cased>
 
-*No concept pages yet.*
+*No pages yet.*
 
-## Entities
+## <Cat2 title-cased>
 
-*No entity pages yet.*
-
-## Comparisons
-
-*No comparison pages yet.*
+*No pages yet.*
 ```
 
 ### Step 4: Create wiki/log.md
-
-Use the Write tool to create `wiki/log.md`:
 
 ```markdown
 # Processing Log
@@ -243,8 +218,6 @@ Chronological record of all wiki processing activity.
 
 ### Step 5: Create wiki/overview.md
 
-Use the Write tool to create `wiki/overview.md`:
-
 ```markdown
 # Wiki Overview
 
@@ -253,21 +226,17 @@ Use the Write tool to create `wiki/overview.md`:
 
 ### Step 6: Report
 
-Tell the user:
-
-"Wiki structure initialized. Here's what was created:
-- `raw/` — 6 subdirectories for your source material (articles, papers, repos, data, images, assets)
-- `wiki/` — 4 subdirectories for wiki pages (concepts, entities, sources, comparisons)
-- `wiki/index.md` — Empty content catalog
-- `wiki/log.md` — Empty processing log
-- `wiki/overview.md` — Placeholder overview
-- `WIKI_SCHEMA.md` — Schema and conventions reference
-
-**Next step**: Add source files to `raw/` (markdown, PDFs, images, code, data files) and run `/wikify` again to begin ingesting."
+Tell the user what was created, listing the actual category folders used.
 
 ---
 
 ## Ingest Workflow
+
+### Step 0: Read Categories from WIKI_SCHEMA.md
+
+**Before doing anything else**, read `WIKI_SCHEMA.md` and extract the Categories section. Parse each line of the form `- \`<folder>/\` → type: \`<type>\`` to build the category map.
+
+This map drives all file placement and frontmatter type values in Steps 4 and 5. Never use hardcoded folder names — always use what WIKI_SCHEMA.md says.
 
 ### Step 1: Discover Unprocessed Files
 
@@ -279,9 +248,7 @@ pattern: raw/**/*
 
 Filter out system files: `.DS_Store`, `.gitkeep`, `Thumbs.db`, and any files starting with `.`.
 
-Then read `wiki/log.md` and extract all source file paths. Look for lines matching the pattern `## [YYYY-MM-DD] ingest | ` — these are ingest entries. Within each ingest entry, look for the raw file path referenced in the source summary page that was created.
-
-Also check each source summary page in `wiki/sources/` — read their `sources:` frontmatter to find which raw files have already been processed.
+Check each source summary page in `wiki/sources/` — read their `sources:` frontmatter to find which raw files have already been processed.
 
 Any file in `raw/` whose path does not appear in any source summary's `sources:` frontmatter is unprocessed.
 
@@ -300,45 +267,50 @@ Read the file using the appropriate method based on file extension:
 | `.py`, `.js`, `.ts`, `.rs`, `.go`, `.java`, `.c`, `.cpp`, `.h`, `.rb`, `.sh` | Use the Read tool directly |
 | `.pdf` | Use the `read_pdf_content` MCP tool |
 | `.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.svg` | Use the Read tool (Claude sees images via vision) |
-| Directories in `raw/repos/` | Read README.md first, then key source files (entry points, config) |
+| Directories in `raw/repos/` | Read README.md first, then key source files |
 | Other | Report the file type and ask the user for a text summary or to convert it |
 
-### Step 3: Present Summary and Discuss
+### Step 3: Detect Domain and Present Summary
+
+**First, detect the domain of the source material.**
+
+| Domain | Signals |
+|--------|---------|
+| **Fiction / Narrative** | Novel, story, chapter headings, character names, dialogue |
+| **Technical / Code** | Imports, function names, APIs, architecture diagrams |
+| **Research / Academic** | Citations, abstracts, methodology sections |
+| **General** | Mixed or unclear |
+
+**Extraction mandate: Be exhaustive, not selective.**
+
+The rule: **if it has a proper name, it gets a page.** Do not filter by importance.
 
 After reading the source, present the user with:
 
-1. **Key Takeaways** — 3-5 bullet points summarizing the most important information
-2. **Identified Entities** — People, organizations, tools, projects, frameworks mentioned
-3. **Identified Concepts** — Techniques, patterns, theories, ideas introduced or discussed
-4. **Contradictions** — Read existing wiki pages related to the identified entities and concepts. Note any claims that conflict with information in this source.
-5. **Suggested Wiki Pages** — List pages to create or update
+1. **Key Takeaways** — Comprehensive bullet list
+2. **Identified items per category** — For each category in the wiki (from WIKI_SCHEMA.md), list every item from the source that belongs there. Be exhaustive.
+3. **Identified source-summary** — What the source summary page will contain
+4. **Contradictions** — Claims that conflict with existing wiki pages
+5. **Suggested Wiki Pages** — Complete list organized by category
 
-Then ask: "Any additional context or direction for how to file this?"
+Then ask: "Any additional context or direction for how to file this? Are there any items I missed?"
 
-Wait for the user's response before proceeding. The user might correct misunderstandings, add context, emphasize certain aspects, or just say "looks good."
+Wait for the user's response before proceeding.
 
 ### Step 4: Create and Update Wiki Pages
 
-For each page, use the Write tool (for new pages) or the Edit tool (for updating existing pages).
+**Read the category map from WIKI_SCHEMA.md** (Step 0 result) to determine all file paths and type values.
 
 **Source summary page** (always create):
 - Path: `wiki/sources/<kebab-case-slug>.md`
-- Include full YAML frontmatter (title, type: source-summary, sources, related, confidence, created, updated)
-- Body: summary paragraph, key takeaways as bullets, notable data points, links to related wiki pages
+- Frontmatter `type: source-summary`
+- Body: summary paragraph, key takeaways, links to related wiki pages
 
-**Concept pages** (create or update):
-- Check `wiki/concepts/` for an existing page matching the concept
-- If found: read it, append new information from this source, add the raw file to `sources:` frontmatter, update the `updated:` date
-- If not found: create a new page in `wiki/concepts/<slug>.md` with full frontmatter
-
-**Entity pages** (create or update):
-- Same create-or-update pattern in `wiki/entities/`
-- Check for existing pages before creating new ones
-
-**Comparison pages** (create only when warranted):
-- Only create when the source explicitly compares alternatives, tools, or approaches
-- Use tables for side-by-side analysis in the page body
-- Path: `wiki/comparisons/<slug>.md`
+**Pages for each category** (create or update):
+- Path: `wiki/<folder>/<slug>.md` where `<folder>` comes from the category map
+- Frontmatter `type: <type>` where `<type>` comes from the category map
+- Check for an existing page before creating — if found, read it, append new information, add the raw file to `sources:`, update `updated:`
+- Create a page for every item identified in Step 3 for that category. Do not omit anything.
 
 All pages must use lowercase kebab-case filenames and the full frontmatter schema.
 
@@ -346,37 +318,35 @@ All pages must use lowercase kebab-case filenames and the full frontmatter schem
 
 **Update `wiki/index.md`**:
 - Read the current index
-- Add entries for all newly created pages under the appropriate category section (Sources, Concepts, Entities, Comparisons)
+- Add entries for all newly created pages under the matching category section
+- The section names come from WIKI_SCHEMA.md categories — do not add or invent sections not in the schema
 - Format: `- [Title](relative-path) — type: <type>, confidence: <level>`
 - Keep entries sorted alphabetically within each section
+- Never remove a section heading — use `*None yet.*` as placeholder
 
 **Append to `wiki/log.md`**:
-- Add an entry in the format:
 ```markdown
 ## [YYYY-MM-DD] ingest | Source Title
 - Source: raw/path/to/file.ext
 - Created: sources/slug.md
-- Created: concepts/new-concept.md (if applicable)
-- Updated: entities/existing-entity.md (if applicable)
+- Created: <cat>/new-page.md (if applicable)
+- Updated: <cat>/existing-page.md (if applicable)
 ```
-- Use today's date
 
 ### Step 6: Cross-Reference Pass
 
-Read all pages that were created or modified during this ingest. For each page:
+Read all pages created or modified during this ingest. For each page:
 
 1. Check the `related:` frontmatter list
 2. For every page A that lists page B in `related:`, verify page B also lists page A
-3. If page B doesn't link back to page A, edit page B to add page A to its `related:` list
+3. If page B doesn't link back, edit page B to add page A to its `related:` list
 4. Update the `updated:` date on any page modified during this pass
-
-This ensures all cross-references are bidirectional.
 
 ### Step 7: Continue or Stop
 
-If there are more unprocessed files in `raw/`, ask: "Process the next file (<filename>), or stop here?"
+If there are more unprocessed files, ask: "Process the next file (<filename>), or stop here?"
 
-If no more unprocessed files remain, report: "All sources processed. Run `/wikify` with a question to query the wiki, or `/wikify lint` for a health check."
+If no more unprocessed files remain: "All sources processed. Run `/wikify` with a question to query the wiki, or `/wikify lint` for a health check."
 
 ---
 
@@ -388,38 +358,35 @@ The user's question is the text they typed after `/wikify`. Extract the full que
 
 ### Step 2: Gather Context
 
-1. Read `wiki/overview.md` for high-level context about the wiki's scope
+1. Read `wiki/overview.md` for high-level context
 2. Read `wiki/index.md` for the full page catalog
-3. Identify relevant pages by matching the question against page titles, types, and descriptions in the index
+3. Identify relevant pages by matching the question against page titles and descriptions
 
 ### Step 3: Read Relevant Pages
 
-Read the identified relevant wiki pages (typically 3-10 pages depending on the question scope). Prioritize:
+Read the identified relevant wiki pages (typically 3-10 depending on scope). Prioritize:
 - Pages whose titles closely match the question topic
-- Concept pages over source summaries (they synthesize across sources)
-- Comparison pages when the question involves trade-offs or alternatives
+- Non-source pages over source summaries (they synthesize across sources)
 
 ### Step 4: Synthesize Answer
 
 Produce a comprehensive answer grounded in wiki content:
-- Use inline citations in the format `(see [Page Title](wiki/path/page.md))` — link to wiki pages, not raw sources
-- Note confidence levels — if key claims come from low-confidence pages, say so
-- Structure the answer clearly with headings if the topic is complex
+- Use inline citations: `(see [Page Title](wiki/path/page.md))`
+- Note confidence levels for key claims
+- Structure clearly with headings if complex
 
 ### Step 5: Identify Gaps
 
-After answering, check whether the question touches topics not well-covered in the wiki:
-- Mention any areas where information is thin or missing
-- Suggest specific types of sources that would fill the gaps (e.g., "a paper on X" or "documentation for Y")
+After answering, note areas where information is thin or missing and suggest source types that would fill the gaps.
 
 ### Step 6: Offer to Save
 
-Ask the user: "Should I save this answer as a wiki page?"
+Ask: "Should I save this answer as a wiki page?"
 
 If yes:
-1. Ask which type fits best (concept, comparison, or entity)
-2. Create the page with full YAML frontmatter
-3. Update `wiki/index.md` with the new entry
+1. Ask which category fits best (from WIKI_SCHEMA.md categories)
+2. Create the page with full frontmatter
+3. Update `wiki/index.md`
 4. Append to `wiki/log.md` with a `query` action type
 5. Run a cross-reference pass on the new page
 
@@ -427,11 +394,15 @@ If yes:
 
 ## Lint Workflow
 
-Run all six health checks on the wiki, then present results and offer fixes.
+### Step 0: Read Categories from WIKI_SCHEMA.md
+
+Read `WIKI_SCHEMA.md` and extract the full category map before running any checks. All folder paths used in checks below come from this map — never hardcode folder names.
+
+Run all six health checks, then present results and offer fixes.
 
 ### Check 1: Contradictions
 
-Read all wiki pages in `wiki/concepts/`, `wiki/entities/`, and `wiki/comparisons/`. Look for claims that conflict across pages — for example, one page says a tool was released in 2020 while another says 2019, or one page recommends approach A while another recommends the opposite.
+Read all wiki pages across all category folders (from WIKI_SCHEMA.md). Look for claims that conflict across pages.
 
 For each contradiction found, report:
 - The conflicting claims (quote both)
@@ -446,35 +417,31 @@ Build a link graph across the wiki:
 - For each page, collect all paths from `related:` frontmatter and all inline markdown links
 - Find pages that have zero inbound links from any other page
 
-Exclude `wiki/index.md`, `wiki/log.md`, and `wiki/overview.md` from this check (they are entry points, not linked targets).
+Exclude `wiki/index.md`, `wiki/log.md`, and `wiki/overview.md` from this check.
 
-For each orphan, suggest either adding it to related pages or flagging it for removal.
+For each orphan, suggest adding it to related pages or flagging it for removal.
 
 ### Check 3: Stale Claims
 
 For each source summary in `wiki/sources/`:
 1. Read the `sources:` frontmatter to find the raw file path
-2. Check the raw file's modification timestamp (use `ls -la` via Bash)
-3. Compare against the page's `updated:` frontmatter date
-4. If the raw file is newer, flag the source summary for re-ingestion
-
-Report all stale pages and offer to re-ingest the updated sources.
+2. Check the raw file's modification timestamp (`ls -la` via Bash)
+3. Compare against the page's `updated:` date
+4. If the raw file is newer, flag for re-ingestion
 
 ### Check 4: Missing Cross-References
 
-For every wiki page A that lists page B in its `related:` frontmatter:
+For every wiki page A listing page B in `related:`:
 - Read page B and check if page A appears in B's `related:` list
-- If not, this is a one-directional link that should be bidirectional
-
-Report all missing backlinks and offer to fix them automatically.
+- Report all one-directional links and offer to fix them automatically
 
 ### Check 5: Stub Detection
 
-Scan all wiki page bodies (not frontmatter) for proper nouns, tool names, and concept terms that:
+Scan all wiki page bodies for proper nouns and concept terms that:
 - Appear in 2 or more different pages
-- Do not have their own dedicated page in `wiki/concepts/` or `wiki/entities/`
+- Do not have their own dedicated page in any category folder (from WIKI_SCHEMA.md)
 
-Report these as potential stub pages and offer to create them.
+Report potential stub pages and offer to create them.
 
 ### Check 6: Broken Links
 
@@ -483,11 +450,7 @@ For every wiki page:
 - Check all inline markdown links — verify each target exists
 - Check all `sources:` frontmatter paths — verify each raw file exists
 
-Report all broken links with the page and the broken path.
-
 ### Lint Summary
-
-After all checks, present a summary table:
 
 ```
 | Check               | Issues Found |
@@ -500,4 +463,115 @@ After all checks, present a summary table:
 | Broken Links        | X           |
 ```
 
-Then offer to fix issues one at a time, starting with broken links (easiest, mechanical fixes) and working up to contradictions (require judgment). Get user approval before each fix.
+Offer to fix issues one at a time, starting with broken links and working up to contradictions. Get user approval before each fix.
+
+---
+
+## Learning Plan Workflow
+
+Generate or regenerate `wiki/learning_plan.md` — a structured, dependency-ordered reading guide for the wiki's domain.
+
+### Step 1: Read Categories and All Concept Pages
+
+Read `WIKI_SCHEMA.md` to get the category list. Then read all pages in every category folder (not `sources/`). Also read `wiki/overview.md` for domain framing.
+
+### Step 2: Identify Bedrock Concepts
+
+From the pages you've read, identify **bedrock concepts** — ideas that must be understood before other topics make sense. A concept is bedrock if:
+
+- Multiple other concepts explicitly depend on it (appear in their `related:` or body text)
+- It is a prerequisite in the academic sense (e.g., probability theory before topic modeling)
+- It is defined and used across more than half the pages
+
+List these as **Tier 1** (learn first).
+
+### Step 3: Build a Dependency Graph
+
+For each remaining concept and entity page, determine what it requires from Tier 1 (and from each other). Group into tiers:
+
+- **Tier 1** — Bedrock: no prerequisites within the wiki
+- **Tier 2** — Builds on Tier 1 only
+- **Tier 3** — Builds on Tier 1 + 2
+- **Tier 4** — Advanced / integrative: requires most of the above
+
+Use the `related:` frontmatter and body content of each page to determine dependencies. When a page explicitly references another concept, that referenced concept is a prerequisite.
+
+### Step 4: Write `wiki/learning_plan.md`
+
+Create the file with:
+
+```markdown
+---
+title: Learning Plan
+type: learning-plan
+created: YYYY-MM-DD
+updated: YYYY-MM-DD
+---
+
+# Learning Plan
+
+A dependency-ordered guide to mastering this wiki's domain. Start at Tier 1 and progress through each tier before advancing — each page builds on those before it.
+
+## How to Use This Plan
+
+Each item links to a wiki page. Read pages within a tier in any order; complete a tier before moving to the next.
+
+## Tier 1 — Bedrock Concepts
+
+*These are the foundational ideas everything else builds on. Start here.*
+
+1. [[page-slug|Page Title]] — one-sentence description of why this is foundational
+
+## Tier 2 — Core Methods
+
+*Requires Tier 1. These concepts directly apply or extend the bedrock ideas.*
+
+1. [[page-slug|Page Title]] — one-sentence description, noting which Tier 1 concept it builds on
+
+## Tier 3 — Applied Techniques
+
+*Requires Tier 1–2. These are specific techniques, tools, or systems.*
+
+...
+
+## Tier 4 — Advanced & Integrative
+
+*Requires Tier 1–3. These combine multiple prior concepts or represent the current research frontier.*
+
+...
+
+## Quick Reference: Dependency Map
+
+A compact view of which concepts depend on which:
+
+| Concept | Depends On |
+|---------|-----------|
+| Page Title | [[prereq-1]], [[prereq-2]] |
+...
+```
+
+Use Obsidian-style `[[page-slug|Display Title]]` links throughout. Pages outside the wiki (foundational math, external tools, etc.) can be referenced as plain text rather than wiki links.
+
+### Step 5: Update Index and Log
+
+- Add `learning_plan.md` to `wiki/index.md` under a new `## Learning Resources` section (or append it if that section exists)
+- Append to `wiki/log.md`:
+```markdown
+## [YYYY-MM-DD] learning_plan | Generated Learning Plan
+- Created: wiki/learning_plan.md
+- Tiers: X concepts across Y tiers
+```
+
+### Step 6: Build Website
+
+After writing `learning_plan.md`, run the build script to regenerate the website with the learning plan included:
+
+```bash
+python3 ~/.claude/scripts/build-site.sh wiki website
+```
+
+Run this from the wiki project root directory. The learning plan will appear as a "Learning Plan" link in the site nav, linking directly to its page.
+
+### Step 7: Confirm
+
+Report: "Learning plan created at `wiki/learning_plan.md` with X pages across Y tiers. Website rebuilt at `website/`." Offer to regenerate if the user wants different tier groupings.
