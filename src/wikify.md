@@ -4,9 +4,9 @@ description: Build and maintain an LLM-compiled knowledge wiki (Karpathy pattern
 
 # /wikify — LLM Knowledge Wiki
 
-> **build-site.sh** is at `~/.claude/scripts/build-site.sh`. Run it from any wiki project root to generate the D3 website:
+> **build-site.sh** is at `~/.claude/skills/wikify/scripts/build-site.sh`. Run it from any wiki project root to generate the D3 website:
 > ```bash
-> python3 ~/.claude/scripts/build-site.sh wiki website
+> python3 ~/.claude/skills/wikify/scripts/build-site.sh wiki website
 > ```
 
 You are running the wikify skill. Follow these instructions exactly.
@@ -567,7 +567,7 @@ Use Obsidian-style `[[page-slug|Display Title]]` links throughout. Pages outside
 After writing `learning_plan.md`, run the build script to regenerate the website with the learning plan included:
 
 ```bash
-python3 ~/.claude/scripts/build-site.sh wiki website
+python3 ~/.claude/skills/wikify/scripts/build-site.sh wiki website
 ```
 
 Run this from the wiki project root directory. The learning plan will appear as a "Learning Plan" link in the site nav, linking directly to its page.

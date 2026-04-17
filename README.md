@@ -52,7 +52,9 @@ cd wikifyskill
 ./scripts/install.sh
 ```
 
-This copies `src/wikify.md` to `~/.claude/commands/` and `src/build-site.sh` to `~/.claude/scripts/`, making `/wikify` available in every project.
+This copies:
+- `src/wikify.md` → `~/.claude/commands/wikify.md` (the `/wikify` slash command)
+- `src/skill/` → `~/.claude/skills/wikify/` (the autonomous skill + `build-site.sh`)
 
 To install to a custom location:
 
@@ -167,7 +169,7 @@ python3 ~/.claude/scripts/build-site.sh wiki website
 Or directly from this repo before installing:
 
 ```bash
-python3 src/build-site.sh wiki website
+python3 src/skill/scripts/build-site.sh wiki website
 ```
 
 This creates a `website/` folder with:
