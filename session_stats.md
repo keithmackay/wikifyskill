@@ -6,3 +6,5 @@ session_id,project,event,timestamp,model,duration,claude_time,cost,tokens,flags,
 36445863-ab6e-4001-a692-e38357b25606,wikifyskill,START,2026-04-15T18:51:09.824Z,,,,,,,Keith.MacKay@XMHM9K7GC5VJ
 36445863-ab6e-4001-a692-e38357b25606,wikifyskill,END,2026-04-15T18:51:27.341Z,,00:00:17,,,,[Abnormal End],Keith.MacKay@XMHM9K7GC5VJ
 81625a25-cc78-4898-8254-27c0ee13a10a,wikifyskill,START,2026-04-15T18:51:27.343Z,,,,,,,Keith.MacKay@XMHM9K7GC5VJ
+81625a25-cc78-4898-8254-27c0ee13a10a,wikifyskill,END,2026-04-17T08:59:22.936Z,,38:07:55,,,,[Abnormal End],Keith.MacKay@XMHM9K7GC5VJ
+fafb64b4-3d40-4ebc-80c2-3148a4294d5d,wikifyskill,START,2026-04-17T08:59:22.938Z,,,,,,,Keith.MacKay@XMHM9K7GC5VJ
