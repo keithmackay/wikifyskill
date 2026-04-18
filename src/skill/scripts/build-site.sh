@@ -789,6 +789,9 @@ with open(os.path.join(WEBSITE_DIR, "category.js"), "w") as f:
 const TYPE_COLORS = (typeof WIKI_DATA !== 'undefined') ? WIKI_DATA.typeColors : {};
 const CONF_OP = { 'high': 1.0, 'medium': 0.65, 'low': 0.35 };
 
+// Module-level reference so highlightVizNode/clearVizHighlight can reach the D3 selection.
+let vizNodes = null;
+
 async function initCategoryViz(catType) {
   const data = (typeof WIKI_DATA !== 'undefined') ? WIKI_DATA : await (await fetch('../data.json')).json();
   const nodes = data.nodes.filter(n => n.type === catType);
@@ -813,6 +816,7 @@ function renderBubble(el, nodes, w, h, catType) {
     .attr('fill-opacity', d=>CONF_OP[d.data.confidence]||0.5).attr('stroke', color).attr('stroke-width', 1);
   nd.filter(d=>d.r>24).append('text').text(d=>d.data.title).attr('text-anchor','middle')
     .attr('dy','0.35em').attr('fill','#f0f6fc').attr('font-size', d=>Math.min(d.r/3,14)).attr('pointer-events','none');
+  vizNodes = { sel: nd, getId: d => d.data.id, color };
 }
 
 function renderTimeline(el, nodes, w, h, catType) {
@@ -831,6 +835,27 @@ function renderTimeline(el, nodes, w, h, catType) {
   nd.append('circle').attr('r',d=>d.radius||8).attr('fill',color).attr('fill-opacity',d=>CONF_OP[d.confidence]||0.5);
   nd.filter(d=>(d.radius||8)>6).append('text').text(d=>d.title.length>20?d.title.substring(0,18)+'...':d.title)
     .attr('text-anchor','middle').attr('dy',(d,i)=>i%2===0?-14:20).attr('fill','#c9d1d9').attr('font-size',11);
+  vizNodes = { sel: nd, getId: d => d.id, color };
+}
+
+function highlightVizNode(slug) {
+  if (!vizNodes) return;
+  const { sel, getId, color } = vizNodes;
+  sel.select('circle')
+    .transition().duration(200)
+    .attr('stroke', d => getId(d) === slug ? '#ffffff' : color)
+    .attr('stroke-width', d => getId(d) === slug ? 2.5 : 1)
+    .attr('opacity', d => getId(d) === slug ? 1 : 0.25);
+}
+
+function clearVizHighlight() {
+  if (!vizNodes) return;
+  const { sel, color } = vizNodes;
+  sel.select('circle')
+    .transition().duration(200)
+    .attr('stroke', color)
+    .attr('stroke-width', 1)
+    .attr('opacity', 1);
 }
 
 function expandItem(slug) {
@@ -839,13 +864,18 @@ function expandItem(slug) {
   if (!item) return;
   item.classList.add('expanded');
   item.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  highlightVizNode(slug);
 }
 
 function toggleItem(slug) {
   const item = document.getElementById('item-' + slug);
   if (!item) return;
-  if (item.classList.contains('expanded')) item.classList.remove('expanded');
-  else expandItem(slug);
+  if (item.classList.contains('expanded')) {
+    item.classList.remove('expanded');
+    clearVizHighlight();
+  } else {
+    expandItem(slug);
+  }
 }
 """)
 
