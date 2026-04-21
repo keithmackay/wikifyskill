@@ -1,0 +1,6 @@
+{
+  "name": "wikify",
+  "description": "Build and maintain an LLM-compiled knowledge wiki (Karpathy pattern). Auto-detects context and runs Init, Ingest, Query, Lint, or Learning Plan.",
+  "version": "1.0.0",
+  "contextFileName": "GEMINI.md"
+}

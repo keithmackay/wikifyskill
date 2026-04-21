@@ -1,0 +1,74 @@
+# wikify — Lint Workflow
+
+Run six health checks on the wiki, then present results and offer fixes.
+
+## Step 0: Read Categories from WIKI_SCHEMA.md
+
+Read `WIKI_SCHEMA.md` and extract the full category map before running any checks. All folder paths used in checks below come from this map — never hardcode folder names.
+
+## Check 1: Contradictions
+
+Read all wiki pages across all category folders (from WIKI_SCHEMA.md). Look for claims that conflict across pages.
+
+For each contradiction found, report:
+- The conflicting claims (quote both)
+- Which pages contain them
+- Which raw sources support each claim
+
+Ask the user which claim to trust, then update the incorrect page.
+
+## Check 2: Orphan Pages
+
+Build a link graph across the wiki:
+- For each page, collect all paths from `related:` frontmatter and all inline markdown links
+- Find pages that have zero inbound links from any other page
+
+Exclude `wiki/index.md`, `wiki/log.md`, and `wiki/overview.md` from this check.
+
+For each orphan, suggest adding it to related pages or flagging it for removal.
+
+## Check 3: Stale Claims
+
+For each source summary in `wiki/sources/`:
+1. Read the `sources:` frontmatter to find the raw file path
+2. Check the raw file's modification timestamp (`ls -la` via Bash)
+3. Compare against the page's `updated:` date
+4. If the raw file is newer, flag for re-ingestion
+
+## Check 4: Missing Cross-References
+
+For every wiki page A listing page B in `related:`:
+- Read page B and check if page A appears in B's `related:` list
+- Report all one-directional links and offer to fix them automatically
+
+## Check 5: Stub Detection
+
+Scan all wiki page bodies for proper nouns and concept terms that:
+- Appear in 2 or more different pages
+- Do not have their own dedicated page in any category folder (from WIKI_SCHEMA.md)
+
+Report potential stub pages and offer to create them.
+
+## Check 6: Broken Links
+
+For every wiki page:
+- Check all paths in `related:` frontmatter — verify each file exists
+- Check all inline markdown links — verify each target exists
+- Check all `sources:` frontmatter paths — verify each raw file exists
+
+## Lint Summary
+
+Present a summary table after all checks complete:
+
+```
+| Check               | Issues Found |
+|---------------------|-------------|
+| Contradictions      | X           |
+| Orphan Pages        | X           |
+| Stale Claims        | X           |
+| Missing Cross-Refs  | X           |
+| Stubs               | X           |
+| Broken Links        | X           |
+```
+
+Offer to fix issues one at a time, starting with broken links and working up to contradictions. Get user approval before each fix.

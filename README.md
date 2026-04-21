@@ -68,6 +68,95 @@ WIKIFY_INSTALL_DIR=~/.config/claude/commands ./scripts/install.sh
 ./scripts/uninstall.sh
 ```
 
+## Installation
+
+### Claude Code
+
+```bash
+git clone https://github.com/keithmackay/wikifyskill.git
+cd wikifyskill
+./scripts/install.sh
+```
+
+This installs both the `/wikify` slash command and the autonomous skill. Invoke with `/wikify`.
+
+Or install the skill only:
+
+```bash
+cp -r src/skill/ ~/.claude/skills/wikify/
+```
+
+### Codex
+
+Add the plugin to your marketplace config:
+
+**`~/.agents/plugins/marketplace.json`** (create if absent):
+```json
+{
+  "name": "personal",
+  "interface": { "displayName": "Personal Plugins" },
+  "plugins": [
+    {
+      "name": "wikify",
+      "source": { "source": "local", "path": "/path/to/wikifyskill/src/skill/" },
+      "policy": { "installation": "AVAILABLE", "authentication": "ON_INSTALL" },
+      "category": "Productivity"
+    }
+  ]
+}
+```
+
+### Antigravity
+
+The root `src/skill/SKILL.md` is natively compatible with Antigravity (no platform-specific metadata to strip).
+
+**Global install** (all workspaces):
+```bash
+cp -r src/skill/ ~/.gemini/antigravity/skills/wikify/
+```
+
+**Workspace install** (current project only):
+```bash
+cp -r src/skill/ .agents/skills/wikify/
+```
+
+### Gemini CLI
+
+Gemini CLI installs extensions directly from GitHub:
+
+```bash
+gemini extensions install https://github.com/keithmackay/wikifyskill
+```
+
+To update:
+```bash
+gemini extensions update wikify
+```
+
+The skill is auto-discovered from `GEMINI.md` after installation. Note: the repository must be publicly accessible on GitHub for `gemini extensions install` to work.
+
+## Compatibility
+
+| Feature | Claude Code | Codex | Antigravity | Gemini CLI |
+|---------|:-----------:|:-----:|:-----------:|:----------:|
+| Core skill (Init, Ingest, Query, Lint, Learning Plan) | ✅ | ✅ | ✅ | ✅ |
+| Sub-documents (`wikify-init.md`, etc.) | ✅ | ✅ | ✅ | ✅ |
+| Scripts (`scripts/build-site.sh`) | ✅ | ✅ | ✅ | ✅ |
+| `/wikify` slash command | ✅ | ❌ | ❌ | ❌ |
+
+Legend: ✅ Supported · ❌ Not supported
+
+> **Note on the slash command:** The `/wikify` slash command is a Claude Code-specific convenience that mirrors the skill. On Codex, Antigravity, and Gemini CLI, invoke the skill by name (e.g., "run wikify" or mention `/wikify`).
+
+## References
+
+- **Claude Code Skills:** https://code.claude.com/docs/en/skills
+- **Claude Code Complete Guide (PDF):** https://resources.anthropic.com/hubfs/The-Complete-Guide-to-Building-Skill-for-Claude.pdf
+- **Codex Plugins:** https://developers.openai.com/codex/plugins/build
+- **Antigravity Skills:** https://antigravity.google/docs/skills
+- **Gemini CLI Extensions:** https://github.com/google-gemini/gemini-cli/blob/main/docs/extension.md
+- **Agent Skills open standard:** https://agentskills.io/home
+
 ## Usage
 
 ### Initialize a new wiki
