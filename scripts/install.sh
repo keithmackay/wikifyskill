@@ -28,4 +28,6 @@ fi
 
 mkdir -p "$SKILLS_DIR"
 cp -r "$SRC_DIR/skill/." "$SKILLS_DIR/"
+mkdir -p "$SKILLS_DIR/scripts"
+cp "$SRC_DIR/build-site.sh" "$SKILLS_DIR/scripts/build-site.sh"
 echo "Installed skill to $SKILLS_DIR/"
