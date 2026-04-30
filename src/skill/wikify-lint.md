@@ -8,7 +8,15 @@ Read `WIKI_SCHEMA.md` and extract the full category map before running any check
 
 ## Check 1: Contradictions
 
-Read all wiki pages across all category folders (from WIKI_SCHEMA.md). Look for claims that conflict across pages.
+> **Note:** On wikis with more than 50 pages, offer to run the Contradictions check on a single category at a time rather than the whole wiki.
+
+Use a chunked approach:
+
+1. Read `wiki/index.md` to get the full page list grouped by category.
+2. Process one category at a time. For each category folder, read all pages in that folder.
+3. Within each category, check for internal contradictions (claims that conflict between pages in the same folder).
+4. After finishing a category, check cross-category contradictions only for pages that share overlapping `related:` links — not all-vs-all.
+5. Skip `wiki/sources/` — source summary pages rarely contain synthesised claims.
 
 For each contradiction found, report:
 - The conflicting claims (quote both)

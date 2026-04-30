@@ -35,7 +35,12 @@ Examine the current working directory to determine which workflow to run. Use th
    - **Lint**: "Run a health check (e.g., `/wikify lint`)"
    - **Add sources**: "Add new files to `raw/` and run `/wikify` again"
 
-Report which workflow was detected and ask the user to confirm before proceeding.
+**Workflow routing behavior:**
+
+- **Init, Ingest, Lint, Learning Plan**: proceed directly. Announce in one line (e.g. "Detected: 3 unprocessed files. Starting Ingest."), then start.
+- **Query**: proceed directly — no announcement needed, just answer.
+- **Inconsistent state**: pause and ask the user before doing anything.
+- **Nothing to do**: present the menu as described above.
 
 ---
 
@@ -246,11 +251,12 @@ Use the Glob tool to scan `raw/` recursively for all files:
 pattern: raw/**/*
 ```
 
-Filter out system files: `.DS_Store`, `.gitkeep`, `Thumbs.db`, and any files starting with `.`.
+**Build the processed-file set from `wiki/log.md`:**
 
-Check each source summary page in `wiki/sources/` — read their `sources:` frontmatter to find which raw files have already been processed.
-
-Any file in `raw/` whose path does not appear in any source summary's `sources:` frontmatter is unprocessed.
+1. Read `wiki/log.md`. Extract every source file path from lines matching `- Source: ` — each such line contains a path like `raw/path/to/file.ext`. This is the set of already-processed files.
+2. Use the Glob tool to list all raw files: `pattern: raw/**/*`. Filter out `.DS_Store`, `.gitkeep`, `Thumbs.db`, and any file starting with `.`.
+3. Any raw file whose path does not appear in the processed-file set is unprocessed.
+4. **Fallback**: If `wiki/log.md` is absent or contains no `- Source:` lines (migrating an older wiki), fall back to reading each source summary page in `wiki/sources/` and extracting the `sources:` frontmatter field instead.
 
 Report the count and list of unprocessed files. Ask: "Which file would you like to process first?" or "Process them in order?"
 
@@ -288,10 +294,8 @@ The rule: **if it has a proper name, it gets a page.** Do not filter by importan
 After reading the source, present the user with:
 
 1. **Key Takeaways** — Comprehensive bullet list
-2. **Identified items per category** — For each category in the wiki (from WIKI_SCHEMA.md), list every item from the source that belongs there. Be exhaustive.
-3. **Identified source-summary** — What the source summary page will contain
-4. **Contradictions** — Claims that conflict with existing wiki pages
-5. **Suggested Wiki Pages** — Complete list organized by category
+2. **Pages to create or update** — For each category in the wiki (from WIKI_SCHEMA.md), list every item from the source that belongs there, noting whether each is new or an update to an existing page. Be exhaustive. Flag any contradictions with existing wiki content inline as ⚠️ warnings.
+3. **Contradictions** — (only if any exist) A summary of claims that conflict with existing wiki pages and which raw sources support each side.
 
 Then ask: "Any additional context or direction for how to file this? Are there any items I missed?"
 
@@ -402,7 +406,15 @@ Run all six health checks, then present results and offer fixes.
 
 ### Check 1: Contradictions
 
-Read all wiki pages across all category folders (from WIKI_SCHEMA.md). Look for claims that conflict across pages.
+> **Note:** On wikis with more than 50 pages, offer to run the Contradictions check on a single category at a time rather than the whole wiki.
+
+Use a chunked approach:
+
+1. Read `wiki/index.md` to get the full page list grouped by category.
+2. Process one category at a time. For each category folder, read all pages in that folder.
+3. Within each category, check for internal contradictions (claims that conflict between pages in the same folder).
+4. After finishing a category, check cross-category contradictions only for pages that share overlapping `related:` links — not all-vs-all.
+5. Skip `wiki/sources/` — source summary pages rarely contain synthesised claims.
 
 For each contradiction found, report:
 - The conflicting claims (quote both)
