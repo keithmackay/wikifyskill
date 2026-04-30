@@ -141,12 +141,15 @@ The skill is auto-discovered from `GEMINI.md` after installation. Note: the repo
 |---------|:-----------:|:-----:|:-----------:|:----------:|
 | Core skill (Init, Ingest, Query, Lint, Learning Plan) | ✅ | ✅ | ✅ | ✅ |
 | Sub-documents (`wikify-init.md`, etc.) | ✅ | ✅ | ✅ | ✅ |
-| Scripts (`scripts/build-site.sh`) | ✅ | ✅ | ✅ | ✅ |
+| `build-site.sh` script (bundled) | ✅ | ✅ | ✅ | ✅ |
+| `build-site.sh` auto-run by Learning Plan | ✅ | ⚠️ | ⚠️ | ⚠️ |
 | `/wikify` slash command | ✅ | ❌ | ❌ | ❌ |
 
-Legend: ✅ Supported · ❌ Not supported
+Legend: ✅ Supported · ⚠️ Path adjustment required · ❌ Not supported
 
 > **Note on the slash command:** The `/wikify` slash command is a Claude Code-specific convenience that mirrors the skill. On Codex, Antigravity, and Gemini CLI, invoke the skill by name (e.g., "run wikify" or mention `/wikify`).
+
+> **Note on `build-site.sh` auto-run:** The Learning Plan workflow attempts to auto-run `build-site.sh` using the Claude Code install path (`~/.claude/skills/wikify/scripts/build-site.sh`). On other platforms, run the script manually from the repo: `python3 src/skill/scripts/build-site.sh wiki website`.
 
 ## References
 
@@ -252,10 +255,10 @@ Reads all wiki pages and produces `wiki/learning_plan.md` — a dependency-order
 Generate a browsable static site from your wiki with an interactive D3.js knowledge graph:
 
 ```bash
-python3 ~/.claude/scripts/build-site.sh wiki website
+python3 ~/.claude/skills/wikify/scripts/build-site.sh wiki website
 ```
 
-Or directly from this repo before installing:
+Or directly from this repo before installing (also works on Codex, Antigravity, and Gemini CLI):
 
 ```bash
 python3 src/skill/scripts/build-site.sh wiki website

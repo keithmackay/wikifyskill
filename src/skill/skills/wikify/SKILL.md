@@ -36,4 +36,9 @@ Examine the current working directory to determine which workflow to run. Use th
    - **Lint**: "Run a health check"
    - **Add sources**: "Add new files to `raw/` and run wikify again"
 
-Report which workflow was detected and ask the user to confirm before proceeding.
+**Workflow routing behavior:**
+
+- **Init, Ingest, Lint, Learning Plan**: proceed directly. Announce in one line (e.g. "Detected: 3 unprocessed files. Starting Ingest."), then start.
+- **Query**: proceed directly — no announcement needed, just answer.
+- **Inconsistent state**: pause and ask the user before doing anything.
+- **Nothing to do**: present the menu as described above.
