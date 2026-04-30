@@ -141,15 +141,12 @@ The skill is auto-discovered from `GEMINI.md` after installation. Note: the repo
 |---------|:-----------:|:-----:|:-----------:|:----------:|
 | Core skill (Init, Ingest, Query, Lint, Learning Plan) | ✅ | ✅ | ✅ | ✅ |
 | Sub-documents (`wikify-init.md`, etc.) | ✅ | ✅ | ✅ | ✅ |
-| `build-site.sh` script (bundled) | ✅ | ✅ | ✅ | ✅ |
-| `build-site.sh` auto-run by Learning Plan | ✅ | ⚠️ | ⚠️ | ⚠️ |
+| Scripts (`scripts/build-site.sh`) | ✅ | ✅ | ✅ | ✅ |
 | `/wikify` slash command | ✅ | ❌ | ❌ | ❌ |
 
-Legend: ✅ Supported · ⚠️ Path adjustment required · ❌ Not supported
+Legend: ✅ Supported · ❌ Not supported
 
 > **Note on the slash command:** The `/wikify` slash command is a Claude Code-specific convenience that mirrors the skill. On Codex, Antigravity, and Gemini CLI, invoke the skill by name (e.g., "run wikify" or mention `/wikify`).
-
-> **Note on `build-site.sh` auto-run:** The Learning Plan workflow attempts to auto-run `build-site.sh` using the Claude Code install path (`~/.claude/skills/wikify/scripts/build-site.sh`). On other platforms, run the script manually from the repo: `python3 src/skill/scripts/build-site.sh wiki website`.
 
 ## References
 
