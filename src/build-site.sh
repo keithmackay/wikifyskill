@@ -64,6 +64,7 @@ def parse_page(filepath, category):
     fm, body = {}, ""
     lines = text.split("\n")
     i = 0
+    body_lines = lines
     if lines and lines[0].strip() == "---":
         i = 1
         collecting = None
