@@ -61,6 +61,7 @@ def parse_page(filepath, category):
     fm, body = {}, ""
     lines = text.split("\n")
     i = 0
+    body_lines = lines  # default: no frontmatter, treat entire file as body
     if lines and lines[0].strip() == "---":
         i = 1
         collecting = None
