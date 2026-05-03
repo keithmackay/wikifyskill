@@ -166,8 +166,15 @@ def md_to_html(text):
         line = re.sub(r'^### (.+)', lambda m: f'<h3>{md_inline(m.group(1))}</h3>', line)
         line = re.sub(r'^## (.+)', lambda m: f'<h2>{md_inline(m.group(1))}</h2>', line)
         line = re.sub(r'^# (.+)', lambda m: f'<h1>{md_inline(m.group(1))}</h1>', line)
-        line = re.sub(r'^- (.+)', lambda m: f'<li>{md_inline(m.group(1))}</li>', line)
-        if not re.match(r'^<(h[1-4]|li)', line):
+        if re.match(r'^- ', line):
+            # Collect all consecutive list lines into a <ul> block
+            list_items = []
+            while i < len(lines) and re.match(r'^- ', lines[i]):
+                list_items.append(f'<li>{md_inline(lines[i][2:])}</li>')
+                i += 1
+            out.append("<ul>" + "".join(list_items) + "</ul>")
+            continue
+        if not re.match(r'^<(h[1-4])', line):
             line = md_inline(line)
         if line == "":
             line = "<br>"
@@ -673,8 +680,17 @@ nav a.active {
   margin: 16px 0 8px;
 }
 
-.page-container .content li {
-  margin-left: 22px; margin-bottom: 6px;
+.page-container .content li,
+.cat-item-body.content li {
+  margin-left: 22px; margin-bottom: 4px;
+}
+
+.page-container .content ul,
+.cat-item-body.content ul,
+#page-detail-content ul {
+  margin: 6px 0 10px 8px;
+  padding-left: 0;
+  list-style: disc;
 }
 
 .page-container .content code {
@@ -883,20 +899,16 @@ function toggleItem(slug) {
   else expandItem(slug);
 }
 
-async function openPageDetail(slug) {
+function openPageDetail(slug) {
+  const item = document.getElementById('item-' + slug);
   const viz = document.getElementById('category-viz');
   const detail = document.getElementById('page-detail');
   const content = document.getElementById('page-detail-content');
-  if (!detail) return;
-  try {
-    const resp = await fetch('../pages/' + slug + '.html');
-    const html = await resp.text();
-    const doc = new DOMParser().parseFromString(html, 'text/html');
-    const body = doc.querySelector('.content');
-    content.innerHTML = body ? body.innerHTML : '<p>No content.</p>';
-  } catch(e) {
-    content.innerHTML = '<p>Could not load page content.</p>';
-  }
+  if (!detail || !item) return;
+  const titleEl = item.querySelector('.cat-item-title');
+  const bodyEl = item.querySelector('.cat-item-body');
+  const title = titleEl ? '<h2 style="margin-bottom:12px;color:var(--color-text-heading)">' + titleEl.textContent + '</h2>' : '';
+  content.innerHTML = title + (bodyEl ? bodyEl.innerHTML : '<p>No content.</p>');
   if (viz) viz.style.display = 'none';
   detail.style.display = 'block';
 }
