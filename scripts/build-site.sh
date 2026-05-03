@@ -278,6 +278,15 @@ for p in pages:
         "dir": p["dir"],
     })
 
+unique_sources = set(s for p in pages for s in p["sources"])
+few_sources = len(unique_sources) < 10
+
+# Precompute related-slug sets for mutual back-reference lookup
+related_slugs = {
+    p["slug"]: {os.path.splitext(os.path.basename(r))[0] for r in p["related"]}
+    for p in pages
+}
+
 edges = []
 seen_edges = set()
 for p in pages:
@@ -293,6 +302,8 @@ for p in pages:
         seen_edges.add(edge_key)
         sources_b = set(slug_map[slug_b]["sources"])
         weight = 1 + len(sources_a & sources_b)
+        if few_sources and slug_a in related_slugs.get(slug_b, set()):
+            weight += 2  # mutual back-reference bonus when source diversity is low
         edges.append({
             "source": slug_a,
             "target": slug_b,
