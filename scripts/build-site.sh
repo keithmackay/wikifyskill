@@ -5,6 +5,7 @@
 import sys
 import os
 import json
+import math
 import re
 import shutil
 
@@ -281,11 +282,111 @@ for p in pages:
 unique_sources = set(s for p in pages for s in p["sources"])
 few_sources = len(unique_sources) < 10
 
-# Precompute related-slug sets for mutual back-reference lookup
+
+def compute_cooccur_weights(wiki_dir, pages):
+    """Compute edge weights from PDF co-occurrence. Returns dict[(slug_a, slug_b)] -> score,
+    or None if PDFs are unavailable or fitz is not installed."""
+    try:
+        import fitz
+    except ImportError:
+        return None
+
+    wiki_parent = os.path.dirname(os.path.abspath(wiki_dir))
+    papers_dir = os.path.join(wiki_parent, "raw", "papers")
+    if not os.path.isdir(papers_dir):
+        return None
+    pdfs = sorted(f for f in os.listdir(papers_dir) if f.lower().endswith(".pdf"))
+    if not pdfs:
+        return None
+
+    # Use only the first PDF to avoid double-counting duplicate editions
+    pdf_path = os.path.join(papers_dir, pdfs[0])
+    print(f"  PDF co-occurrence: reading {pdfs[0]} ...")
+    doc = fitz.open(pdf_path)
+    full_text = "".join(page.get_text() for page in doc)
+    doc.close()
+
+    sentences = re.split(r'(?<=[.!?])\s+', full_text)
+    paragraphs = [p.strip() for p in re.split(r'\n\s*\n', full_text) if len(p.strip()) > 50]
+    chapters = [c for c in re.split(r'\n(?:Chapter|CHAPTER|BOOK)\s+[IVXivx\d]+', full_text)
+                if len(c.strip()) > 200]
+    print(f"  Segments: {len(sentences):,} sentences · {len(paragraphs):,} paragraphs · {len(chapters):,} chapters")
+
+    SKIP_WORDS = {'the', 'and', 'that', 'this', 'with', 'from', 'into', 'upon', 'over',
+                  'under', 'ring', 'one', 'two', 'men', 'man', 'old', 'book', 'dark', 'lord'}
+    slug_to_title = {p["slug"]: p["title"].lower() for p in pages}
+
+    # Build per-entity search variants (capitalised words ≥ 5 chars, plus full clean title)
+    entities = {}
+    for p in pages:
+        slug = p["slug"]
+        clean = re.sub(r'\s*\([^)]*\)', '', p["title"]).strip()
+        variants = set()
+        if len(clean) > 3 and clean.lower() not in SKIP_WORDS:
+            variants.add(clean.lower())
+        for word in re.findall(r"[A-Z][a-z']+", clean):
+            if len(word) >= 5 and word.lower() not in SKIP_WORDS:
+                variants.add(word.lower())
+        if variants:
+            entities[slug] = variants
+
+    def entities_in_segment(text):
+        text_lower = text.lower()
+        found = []
+        for slug, variants in entities.items():
+            for v in variants:
+                if re.search(r'\b' + re.escape(v) + r'\b', text_lower):
+                    found.append(slug)
+                    break
+        return found
+
+    def count_pairs(segments):
+        from collections import Counter
+        counts = Counter()
+        for seg in segments:
+            found = entities_in_segment(seg)
+            for i in range(len(found)):
+                for j in range(i + 1, len(found)):
+                    a, b = found[i], found[j]
+                    # Skip compound-name pairs where one title contains the other
+                    ta, tb = slug_to_title.get(a, ""), slug_to_title.get(b, "")
+                    if ta in tb or tb in ta:
+                        continue
+                    counts[tuple(sorted([a, b]))] += 1
+        return counts
+
+    print("  Scanning sentences ...")
+    sent = count_pairs(sentences)
+    print("  Scanning paragraphs ...")
+    para = count_pairs(paragraphs)
+    print("  Scanning chapters ...")
+    chap = count_pairs(chapters)
+
+    all_keys = set(sent) | set(para) | set(chap)
+    weights = {k: sent.get(k, 0) * 3 + para.get(k, 0) * 2 + chap.get(k, 0)
+               for k in all_keys}
+    print(f"  Co-occurrence pairs found: {len(weights):,}")
+    return weights
+
+
+def cooccur_to_weight(score):
+    """Map a raw co-occurrence score to a 1-5 edge weight via log2 bucketing."""
+    if score <= 0:
+        return 1
+    return 1 + min(4, int(math.log2(score + 1)))
+
+# Precompute related-slug sets for mutual back-reference lookup (fallback)
 related_slugs = {
     p["slug"]: {os.path.splitext(os.path.basename(r))[0] for r in p["related"]}
     for p in pages
 }
+
+# For few-source wikis, try PDF co-occurrence first; fall back to mutual back-ref
+cooccur_weights = None
+if few_sources:
+    cooccur_weights = compute_cooccur_weights(WIKI_DIR, pages)
+    if cooccur_weights is None:
+        print("  No PDFs found — using mutual back-reference weighting.")
 
 edges = []
 seen_edges = set()
@@ -300,10 +401,13 @@ for p in pages:
         if edge_key in seen_edges:
             continue
         seen_edges.add(edge_key)
-        sources_b = set(slug_map[slug_b]["sources"])
-        weight = 1 + len(sources_a & sources_b)
-        if few_sources and slug_a in related_slugs.get(slug_b, set()):
-            weight += 2  # mutual back-reference bonus when source diversity is low
+        if cooccur_weights is not None:
+            weight = cooccur_to_weight(cooccur_weights.get(edge_key, 0))
+        else:
+            sources_b = set(slug_map[slug_b]["sources"])
+            weight = 1 + len(sources_a & sources_b)
+            if few_sources and slug_a in related_slugs.get(slug_b, set()):
+                weight += 2
         edges.append({
             "source": slug_a,
             "target": slug_b,
