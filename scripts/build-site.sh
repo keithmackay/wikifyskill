@@ -29,7 +29,8 @@ PALETTE = [
     '#c678dd',  # extra
     '#abb2bf',  # extra
 ]
-KNOWN_TYPE_ORDER = ['concept', 'entity', 'source-summary', 'comparison']
+KNOWN_TYPE_ORDER = ['concept', 'entity', 'source-summary', 'comparison', 'learning-plan']
+SPECIAL_ROOT_FILES = {'index.md', 'log.md', 'overview.md'}  # root wiki files to skip
 
 # Clean generated files but preserve wiki-css.css (user may have customized it)
 css_backup = None
@@ -87,7 +88,15 @@ def parse_page(filepath, category):
             else:
                 collecting = None
             i += 1
-        body = "\n".join(lines[i:])
+        body_lines = lines[i:]
+    # Strip a leading "# Title" from the body if it duplicates the frontmatter title
+    title_val = fm.get("title", "")
+    if body_lines:
+        first_content = next((l for l in body_lines if l.strip()), "")
+        if first_content.startswith("# ") and first_content[2:].strip() == title_val:
+            idx = next(j for j, l in enumerate(body_lines) if l.strip() == first_content)
+            body_lines = body_lines[idx + 1:]
+    body = "\n".join(body_lines)
 
     if "title" not in fm:
         return None
@@ -106,22 +115,63 @@ def parse_page(filepath, category):
     }
 
 
+def obsidian_link_to_html(match):
+    """Convert [[path/slug|Display Title]] or [[slug]] to HTML links."""
+    inner = match.group(1)
+    if "|" in inner:
+        path, label = inner.split("|", 1)
+    else:
+        path, label = inner, inner
+    slug = os.path.splitext(os.path.basename(path.replace("\\", "/")))[0]
+    return f'<a href="{slug}.html">{html_escape(label.strip())}</a>'
+
+
+def md_inline(line):
+    """Apply inline markdown transformations to a single line."""
+    line = re.sub(r'\*\*([^*]+)\*\*', r'<strong>\1</strong>', line)
+    line = re.sub(r'\*([^*]+)\*', r'<em>\1</em>', line)
+    line = re.sub(r'`([^`]+)`', r'<code>\1</code>', line)
+    line = re.sub(r'\[\[([^\]]+)\]\]', obsidian_link_to_html, line)
+    line = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'<a href="\2">\1</a>', line)
+    return line
+
+
 def md_to_html(text):
     lines = text.split("\n")
     out = []
-    for line in lines:
-        line = re.sub(r'^#### (.+)', r'<h4>\1</h4>', line)
-        line = re.sub(r'^### (.+)', r'<h3>\1</h3>', line)
-        line = re.sub(r'^## (.+)', r'<h2>\1</h2>', line)
-        line = re.sub(r'^# (.+)', r'<h1>\1</h1>', line)
-        line = re.sub(r'\*\*([^*]+)\*\*', r'<strong>\1</strong>', line)
-        line = re.sub(r'\*([^*]+)\*', r'<em>\1</em>', line)
-        line = re.sub(r'`([^`]+)`', r'<code>\1</code>', line)
-        line = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'<a href="\2">\1</a>', line)
-        line = re.sub(r'^- (.+)', r'<li>\1</li>', line)
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        # Markdown table: collect consecutive lines starting with |
+        if line.startswith("|"):
+            table_lines = []
+            while i < len(lines) and lines[i].startswith("|"):
+                table_lines.append(lines[i])
+                i += 1
+            sep_re = re.compile(r'^[\|\s\-:]+$')
+            rows = [l for l in table_lines if not sep_re.match(l)]
+            if rows:
+                out.append("<table>")
+                for row_idx, row in enumerate(rows):
+                    cells = [c.strip() for c in row.strip().strip("|").split("|")]
+                    if row_idx == 0:
+                        out.append("<tr>" + "".join(f"<th>{md_inline(html_escape(c))}</th>" for c in cells) + "</tr>")
+                    else:
+                        out.append("<tr>" + "".join(f"<td>{md_inline(html_escape(c))}</td>" for c in cells) + "</tr>")
+                out.append("</table>")
+            continue
+        # Block-level elements
+        line = re.sub(r'^#### (.+)', lambda m: f'<h4>{md_inline(m.group(1))}</h4>', line)
+        line = re.sub(r'^### (.+)', lambda m: f'<h3>{md_inline(m.group(1))}</h3>', line)
+        line = re.sub(r'^## (.+)', lambda m: f'<h2>{md_inline(m.group(1))}</h2>', line)
+        line = re.sub(r'^# (.+)', lambda m: f'<h1>{md_inline(m.group(1))}</h1>', line)
+        line = re.sub(r'^- (.+)', lambda m: f'<li>{md_inline(m.group(1))}</li>', line)
+        if not re.match(r'^<(h[1-4]|li)', line):
+            line = md_inline(line)
         if line == "":
             line = "<br>"
         out.append(line)
+        i += 1
     return "\n".join(out)
 
 
@@ -133,6 +183,17 @@ def html_escape(s):
 print("Parsing wiki pages...")
 pages = []
 if os.path.isdir(WIKI_DIR):
+    # Parse root-level .md files with frontmatter (e.g. learning_plan.md)
+    for fname in sorted(os.listdir(WIKI_DIR)):
+        if not fname.endswith(".md") or fname in SPECIAL_ROOT_FILES:
+            continue
+        fpath = os.path.join(WIKI_DIR, fname)
+        if os.path.isfile(fpath):
+            p = parse_page(fpath, "")
+            if p and p.get("type"):
+                p["dir"] = ""
+                pages.append(p)
+    # Parse category subdirectories
     for category in sorted(os.listdir(WIKI_DIR)):
         cat_dir = os.path.join(WIKI_DIR, category)
         if not os.path.isdir(cat_dir):
@@ -563,6 +624,15 @@ nav a.active {
   padding: 0 28px;
 }
 
+.page-title {
+  font-size: 36px;
+  font-weight: 700;
+  color: var(--color-text-heading);
+  letter-spacing: var(--tracking-tight);
+  line-height: var(--leading-tight);
+  margin-bottom: 16px;
+}
+
 .page-container .page-meta {
   display: flex; gap: 8px;
   margin-bottom: 24px; flex-wrap: wrap;
@@ -621,9 +691,33 @@ nav a.active {
   margin: 14px 0; width: 100%;
 }
 
-.page-container .content td {
+.page-container .content td,
+.page-container .content th {
   border: 1px solid var(--color-border);
   padding: 10px 14px; text-align: left; font-size: 14px;
+}
+
+.page-container .content th {
+  background: rgba(255,255,255,0.04);
+  font-weight: 600;
+  color: var(--color-text-heading);
+}
+
+.cat-item-body.content table {
+  border-collapse: collapse;
+  margin: 10px 0; width: 100%;
+}
+
+.cat-item-body.content td,
+.cat-item-body.content th {
+  border: 1px solid var(--color-border);
+  padding: 8px 12px; text-align: left; font-size: 13px;
+}
+
+.cat-item-body.content th {
+  background: rgba(255,255,255,0.04);
+  font-weight: 600;
+  color: var(--color-text-heading);
 }
 
 /* ── Scroll Entry Animation ── */
@@ -752,8 +846,9 @@ async function initCategoryViz(catType) {
   if (!nodes.length) return;
   const el = document.getElementById('category-viz');
   const w = el.clientWidth, h = el.clientHeight;
-  if (catType === 'source-summary') renderTimeline(el, nodes, w, h, catType);
-  else renderBubble(el, nodes, w, h, catType);
+  // Defer if layout hasn't resolved yet (flex containers need a paint cycle)
+  if (!w || !h) { requestAnimationFrame(() => initCategoryViz(catType)); return; }
+  renderBubble(el, nodes, w, h, catType);
 }
 
 function renderBubble(el, nodes, w, h, catType) {
@@ -772,30 +867,12 @@ function renderBubble(el, nodes, w, h, catType) {
     .attr('dy','0.35em').attr('fill','#f0f6fc').attr('font-size', d=>Math.min(d.r/3,14)).attr('pointer-events','none');
 }
 
-function renderTimeline(el, nodes, w, h, catType) {
-  const color = TYPE_COLORS[catType] || '#8b949e';
-  const m = {top:30,right:30,bottom:40,left:30};
-  nodes.sort((a,b)=>(a.created||'').localeCompare(b.created||''));
-  const svg = d3.select(el).append('svg').attr('width',w).attr('height',h);
-  const dates = nodes.map(n=>new Date(n.created)).filter(d=>!isNaN(d));
-  if (!dates.length) return;
-  const x = d3.scaleTime().domain(d3.extent(dates)).range([m.left,w-m.right]);
-  svg.append('g').attr('transform','translate(0,'+(h-m.bottom)+')').call(d3.axisBottom(x).ticks(6)).selectAll('text').attr('fill','#8b949e');
-  svg.append('line').attr('x1',m.left).attr('x2',w-m.right).attr('y1',h/2).attr('y2',h/2).attr('stroke','#30363d');
-  const nd = svg.selectAll('g.node').data(nodes).join('g')
-    .attr('transform',(d,i)=>'translate('+x(new Date(d.created))+','+(h/2+(i%2===0?-40:40))+')')
-    .attr('cursor','pointer').on('click',(e,d)=>{ expandItem(d.id); });
-  nd.append('circle').attr('r',d=>d.radius||8).attr('fill',color).attr('fill-opacity',d=>CONF_OP[d.confidence]||0.5);
-  nd.filter(d=>(d.radius||8)>6).append('text').text(d=>d.title.length>20?d.title.substring(0,18)+'...':d.title)
-    .attr('text-anchor','middle').attr('dy',(d,i)=>i%2===0?-14:20).attr('fill','#c9d1d9').attr('font-size',11);
-}
-
 function expandItem(slug) {
   document.querySelectorAll('.cat-item').forEach(el => el.classList.remove('expanded'));
   const item = document.getElementById('item-' + slug);
   if (!item) return;
   item.classList.add('expanded');
-  item.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  item.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 function toggleItem(slug) {
@@ -804,17 +881,51 @@ function toggleItem(slug) {
   if (item.classList.contains('expanded')) item.classList.remove('expanded');
   else expandItem(slug);
 }
+
+async function openPageDetail(slug) {
+  const viz = document.getElementById('category-viz');
+  const detail = document.getElementById('page-detail');
+  const content = document.getElementById('page-detail-content');
+  if (!detail) return;
+  try {
+    const resp = await fetch('../pages/' + slug + '.html');
+    const html = await resp.text();
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const body = doc.querySelector('.content');
+    content.innerHTML = body ? body.innerHTML : '<p>No content.</p>';
+  } catch(e) {
+    content.innerHTML = '<p>Could not load page content.</p>';
+  }
+  if (viz) viz.style.display = 'none';
+  detail.style.display = 'block';
+}
+
+function closePageDetail() {
+  const viz = document.getElementById('category-viz');
+  const detail = document.getElementById('page-detail');
+  if (viz) viz.style.display = '';
+  if (detail) detail.style.display = 'none';
+}
 """)
 
 
 # --- Nav and badge helpers ---
+TYPE_LABELS = {
+    'source-summary': 'Sources',
+    'learning-plan': 'Learning Plan',
+}
+
 def make_nav(types, type_colors, active_type=None, depth=0):
     prefix = "../" * depth
     links = [f'<a href="{prefix}index.html" class="logo">Wiki Graph</a>']
     for t in types:
-        label = t.replace("-", " ").title()
+        label = TYPE_LABELS.get(t, t.replace("-", " ").title())
         active = ' class="active"' if t == active_type else ""
-        links.append(f'<a href="{prefix}categories/{t}.html"{active}>{label}</a>')
+        # learning-plan pages link directly to their page, not a category listing
+        if t == 'learning-plan':
+            links.append(f'<a href="{prefix}pages/learning_plan.html"{active}>{label}</a>')
+        else:
+            links.append(f'<a href="{prefix}categories/{t}.html"{active}>{label}</a>')
     return "\n    ".join(links)
 
 
@@ -860,19 +971,133 @@ print("Generating category pages...")
 
 for cat_type in unique_types:
     cat_pages = [p for p in pages if p["type"] == cat_type]
+
+    # Source summary gets a custom two-pane reader layout instead of the bubble-chart layout
+    if cat_type == 'source-summary':
+        nav_html = make_nav(unique_types, type_colors, active_type=cat_type, depth=1)
+        src_links = []
+        src_bodies = []
+        for idx, p in enumerate(cat_pages):
+            body_html = md_to_html(p["body"])
+            active_cls = ' class="src-item active"' if idx == 0 else ' class="src-item"'
+            src_links.append(f'<li{active_cls} onclick="showSource(\'{p["slug"]}\', this)">{html_escape(p["title"])}</li>')
+            display = '' if idx == 0 else ' style="display:none"'
+            src_bodies.append(f'<div id="src-{p["slug"]}" class="src-body content"{display}>{body_html}</div>')
+        src_links_html = "\n        ".join(src_links)
+        src_bodies_html = "\n      ".join(src_bodies)
+        with open(os.path.join(WEBSITE_DIR, "categories", "source-summary.html"), "w") as f:
+            f.write(f"""\
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Source Summary — Wiki</title>
+  <link rel="stylesheet" href="../wiki-css.css">
+  <style>
+    .src-layout {{
+      display: flex;
+      gap: 0;
+      height: calc(100dvh - var(--nav-height));
+      margin-top: var(--nav-height);
+      max-width: var(--container-max);
+      margin-left: auto;
+      margin-right: auto;
+    }}
+    .src-list {{
+      flex: 0 0 280px;
+      border-right: 1px solid var(--color-border);
+      overflow-y: auto;
+      padding: 24px 16px;
+    }}
+    .src-list h1 {{
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--color-text-heading);
+      letter-spacing: -0.025em;
+      margin-bottom: 4px;
+    }}
+    .src-list .count {{
+      font-size: 12px;
+      color: var(--color-text-muted);
+      margin-bottom: 16px;
+    }}
+    .src-list ul {{ list-style: none; }}
+    .src-item {{
+      padding: 10px 14px;
+      border-radius: var(--radius-md);
+      margin-bottom: 4px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--color-text-muted);
+      transition: background var(--duration-fast), color var(--duration-fast);
+    }}
+    .src-item:hover {{ background: var(--color-surface-hover); color: var(--color-text); }}
+    .src-item.active {{ background: rgba(108,180,238,0.12); color: var(--color-accent); }}
+    .src-content {{
+      flex: 1;
+      overflow-y: auto;
+      padding: 32px 40px;
+    }}
+    .src-body h1 {{ font-size: 22px; font-weight: 700; color: var(--color-text-heading); margin-bottom: 16px; }}
+    .src-body h2 {{ font-size: 17px; font-weight: 600; color: var(--color-text-heading); margin: 18px 0 8px; }}
+    .src-body h3 {{ font-size: 14px; font-weight: 600; color: var(--color-text-heading); margin: 14px 0 6px; }}
+    .src-body {{ font-size: 14px; line-height: 1.7; }}
+    @media (max-width: 768px) {{
+      .src-layout {{ flex-direction: column; height: auto; }}
+      .src-list {{ flex: none; width: 100%; border-right: none; border-bottom: 1px solid var(--color-border); }}
+      .src-content {{ padding: 24px 16px; }}
+    }}
+  </style>
+</head>
+<body class="page-body">
+  <nav>
+    {nav_html}
+  </nav>
+  <div class="src-layout">
+    <div class="src-list">
+      <h1>Sources</h1>
+      <div class="count">{len(cat_pages)} sources</div>
+      <ul>
+        {src_links_html}
+      </ul>
+    </div>
+    <div class="src-content">
+      {src_bodies_html}
+    </div>
+  </div>
+  <script>
+    function showSource(id, el) {{
+      document.querySelectorAll('.src-body').forEach(d => d.style.display = 'none');
+      document.querySelectorAll('.src-item').forEach(d => d.classList.remove('active'));
+      const target = document.getElementById('src-' + id);
+      if (target) target.style.display = '';
+      if (el) el.classList.add('active');
+    }}
+  </script>
+</body>
+</html>
+""")
+        continue
+
     list_items = []
     for p in cat_pages:
         body_html = md_to_html(p["body"])
         list_items.append(
             f'<li id="item-{p["slug"]}" class="cat-item">'
             f'<div class="cat-item-header" onclick="toggleItem(\'{p["slug"]}\')">'
-            f'<a class="cat-item-title" href="../pages/{p["slug"]}.html" onclick="event.stopPropagation()">{html_escape(p["title"])}</a>'
-            f'<span class="meta">'
+            f'<span class="cat-item-title">{html_escape(p["title"])}</span>'
+            f'<span class="cat-item-arrow">&#9654;</span>'
+            f'</div>'
+            f'<div class="cat-item-body content">'
+            f'<div class="cat-item-meta">'
             f'<span>confidence: {p["confidence"]}</span>'
             f'<span>{p["created"]}</span>'
-            f'<span class="cat-item-arrow">&#9654;</span>'
-            f'</span></div>'
-            f'<div class="cat-item-body content">{body_html}</div>'
+            f'</div>'
+            f'{body_html}'
+            f'<button class="cat-item-link" onclick="openPageDetail(\'{p["slug"]}\')">Open full page &rarr;</button>'
+            f'</div>'
             f'</li>'
         )
     list_html = "\n".join(list_items)
@@ -915,6 +1140,11 @@ for cat_type in unique_types:
       height: calc(100dvh - var(--nav-height) - 80px);
       margin-bottom: 0;
     }}
+    .page-list li.cat-item {{
+      display: block;
+      padding: 0;
+      scroll-margin-top: calc(var(--nav-height) + 16px);
+    }}
     .cat-item {{
       border: 1px solid var(--color-border);
       border-radius: var(--radius-md);
@@ -933,13 +1163,40 @@ for cat_type in unique_types:
       gap: 12px;
     }}
     .cat-item-title {{
-      color: var(--color-accent);
-      text-decoration: none;
+      color: var(--color-text);
       font-weight: 500;
       font-size: 14px;
       flex: 1;
     }}
-    .cat-item-title:hover {{ color: var(--color-accent-hover); }}
+    .cat-item:hover .cat-item-title {{ color: var(--color-text-heading); }}
+    .cat-item.expanded .cat-item-title {{ color: var(--color-accent); }}
+    .cat-item-meta {{
+      display: flex; gap: 16px;
+      font-size: 11px; font-weight: 500;
+      color: var(--color-text-muted);
+      margin-bottom: 10px;
+    }}
+    .cat-item-link {{
+      display: inline-block;
+      margin-top: 12px;
+      color: var(--color-accent);
+      text-decoration: none;
+      font-size: 12px; font-weight: 500;
+      background: none; border: none; cursor: pointer; padding: 0;
+    }}
+    .cat-item-link:hover {{ color: var(--color-accent-hover); }}
+    #page-detail {{
+      display: none;
+      height: calc(100dvh - var(--nav-height) - 80px);
+      overflow-y: auto;
+      padding: 16px;
+    }}
+    #page-detail-back {{
+      background: none; border: 1px solid var(--color-border); border-radius: var(--radius-sm);
+      color: var(--color-text-muted); font-size: 12px; font-weight: 500; cursor: pointer;
+      padding: 4px 12px; margin-bottom: 16px; display: inline-block;
+    }}
+    #page-detail-back:hover {{ color: var(--color-text-heading); border-color: var(--color-border-hover); }}
     .cat-item-arrow {{
       color: var(--color-text-muted);
       font-size: 10px;
@@ -993,6 +1250,10 @@ for cat_type in unique_types:
     </div>
     <div class="cat-chart">
       <div id="category-viz"></div>
+      <div id="page-detail">
+        <button id="page-detail-back" onclick="closePageDetail()">&#8592; Back to chart</button>
+        <div id="page-detail-content" class="content"></div>
+      </div>
     </div>
   </div>
   <div class="tooltip"></div>
@@ -1033,6 +1294,7 @@ for p in pages:
     {nav_html}
   </nav>
   <div class="page-container">
+    <h1 class="page-title">{title_esc}</h1>
     <div class="page-meta">
       {type_badge}
       <span class="badge badge-confidence">confidence: {p['confidence']}</span>
