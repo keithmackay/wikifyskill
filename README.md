@@ -33,7 +33,8 @@ Supports all source file types: markdown, PDFs, images (via vision), code reposi
 - **Obsidian-compatible** — All wiki pages use standard markdown with YAML frontmatter, viewable in Obsidian's graph view
 - **Human-in-the-loop** — Ingest processes one source at a time, pausing for your context and direction
 - **Compiled knowledge** — Cross-references, contradiction detection, and confidence tracking built into every page
-- **Full lint suite** — Six automated health checks catch orphans, stale claims, broken links, and more
+- **Full lint suite** — Six automated health checks catch orphans, stale claims, broken links, and more, with unambiguous fixes applied in batch and category-level chunking at scale
+- **Nothing silently lost** — Items noticed during ingest but not compiled into a page are logged to `wiki/excluded.md` and stay searchable; queries can fall back to the raw source on demand
 - **Static site generator** — Ships with a Python script that builds a browsable D3.js knowledge graph site from any wiki
 
 ## Getting Started
@@ -43,6 +44,7 @@ Supports all source file types: markdown, PDFs, images (via vision), code reposi
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) installed and configured
 - Python 3 (for the static site generator)
 - Git (for version control of your wiki)
+- An MCP server providing `read_pdf_content`, only if ingesting PDF sources — other file types (markdown, text, images, code, data) have no external dependency beyond Python 3
 
 ### Installation
 
@@ -150,6 +152,7 @@ Legend: ✅ Supported · ❌ Not supported
 
 ## References
 
+- **Andrej Karpathy's LLM Wiki gist (original inspiration):** https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f
 - **Claude Code Skills:** https://code.claude.com/docs/en/skills
 - **Claude Code Complete Guide (PDF):** https://resources.anthropic.com/hubfs/The-Complete-Guide-to-Building-Skill-for-Claude.pdf
 - **Codex Plugins:** https://developers.openai.com/codex/plugins/build
@@ -167,7 +170,9 @@ Navigate to any project directory and run:
 /wikify
 ```
 
-When no `raw/` or `wiki/` folder exists, wikifyskill scans for existing files in `raw/` and proposes domain-appropriate categories. For a fiction corpus it might suggest `characters`, `locations`, `factions`; for a technical corpus, `concepts`, `tools`, `apis`. Confirm or provide your own list, and the full folder structure is created:
+When no `raw/` or `wiki/` folder exists, wikifyskill scans for existing files in `raw/` and proposes domain-appropriate categories. For a fiction corpus it might suggest `characters`, `locations`, `factions`; for a technical corpus, `concepts`, `tools`, `apis`. Confirm or provide your own list, and the full folder structure is created.
+
+For corpora over 100 files, categories are proposed from a 5-file sample by default — wikifyskill will flag this and offer to sample more broadly (15-20 files) before you confirm. Category choices aren't refactored in place after Init; if you need a different structure later, delete `wiki/` and re-run Init with updated categories against the same immutable `raw/` folder — nothing is lost, and re-ingestion is fast.
 
 ```
 project-root/
@@ -198,10 +203,10 @@ Drop files into `raw/` (articles, PDFs, images, code, data files) and run:
 ```
 
 The skill detects unprocessed files and walks you through each one:
-1. Reads the source and presents key takeaways, identified entities, and identified concepts
+1. Reads the source and presents key takeaways, identified entities, and identified concepts — plus an **Excluded** list of items noticed but not judged page-worthy, so you can promote any of them before they're dropped
 2. Asks for your context or direction before writing anything
 3. Creates or updates wiki pages with full cross-references
-4. Updates the index and processing log
+4. Updates the index and processing log, and logs confirmed exclusions to `wiki/excluded.md` so they stay searchable instead of disappearing
 
 ### Query the wiki
 
@@ -210,6 +215,8 @@ The skill detects unprocessed files and walks you through each one:
 ```
 
 Synthesizes an answer from your compiled wiki with inline citations. Flags knowledge gaps and suggests sources to fill them. Offers to save the answer as a new wiki page.
+
+If a query touches something logged in `wiki/excluded.md`, wikifyskill offers to read the raw source directly instead of returning nothing — stating the tradeoff first (more time/tokens, no cross-referencing or confidence tracking) so you can decide whether an ad-hoc answer is worth it or whether the item should be promoted to a full page. For wikis with more than ~15 relevant pages, queries shortlist from `index.md` before reading full pages; for wikis over ~200 pages, answers are synthesized hierarchically (category summaries first, then a final pass) to stay within context.
 
 ### Run a health check
 
@@ -227,6 +234,8 @@ Runs six checks and presents a summary table:
 | Missing cross-references | One-directional links that should be bidirectional |
 | Stub detection | Terms mentioned in 2+ pages but lacking their own page |
 | Broken links | References to files that no longer exist |
+
+Unambiguous missing cross-references (reciprocal `related:` links) are fixed in batch per category with a summary count; contradictions, stub creation, and other judgment calls stay one-at-a-time with your approval. On wikis over 50 pages, contradiction, cross-reference, and stub checks run one category at a time rather than across the whole wiki.
 
 ### Generate a learning plan
 
