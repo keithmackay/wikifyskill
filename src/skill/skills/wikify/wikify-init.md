@@ -17,6 +17,12 @@ Before creating anything, scan `raw/` for existing files to propose domain-appro
    - Business/strategy → `concepts`, `companies`, `people`, `frameworks`
    - No files found → use default: `concepts`, `entities`, `comparisons`
 
+4. **Large/mixed corpus check.** If the Glob in step 1 returned more than 100 files, the 5-file sample is a small slice of the corpus. Before presenting the proposed list, warn the user:
+
+   "Categories were inferred from a small sample of the corpus (5 of N files). Confirm these categories now, or would you like me to sample more broadly across the corpus first before proposing categories?"
+
+   If the user asks for a broader sample, skim the first 20–50 lines of 15–20 files spread across the corpus (not just the first 5) and re-propose. Otherwise proceed with the current proposal.
+
 Present your proposed list with a one-line rationale for each category based on what you observed in the raw files. Then say:
 
 "These categories are based on the content I found in `raw/`. Confirm this list or give me your own."
@@ -24,6 +30,16 @@ Present your proposed list with a one-line rationale for each category based on 
 Wait for the user's response. Use their confirmed list for all subsequent steps. Always include `sources` regardless of what the user says — it is required and always uses `type: source-summary`.
 
 Store this list as the **category list** for the rest of Init. Each category name is both the subfolder name and the `type` value used in frontmatter for pages in that folder.
+
+## Changing Categories Later
+
+Category choices made at Init time are not easily refactored in place — the tool does not support live schema migration. If you later need a different category structure, the supported recovery path is:
+
+1. Delete the `wiki/` directory (and `website/` if one was built).
+2. Rerun the Init workflow with the updated categories.
+3. Re-ingest from `raw/`.
+
+Nothing is lost: `raw/` is untouched and immutable, so all source material remains. In practice this is fast — minutes, not hours — because Ingest processes `raw/` files fresh each time.
 
 ## Step 1: Create Directories
 

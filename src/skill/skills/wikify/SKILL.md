@@ -22,7 +22,7 @@ Examine the current working directory to determine which workflow to run. Use th
 
 2. **Learning plan requested**: If the user's message contains "learning_plan" or "learning plan", read [wikify-learning-plan.md](wikify-learning-plan.md) and follow it exactly.
 
-3. **Query requested**: If the user's message contains a question or search phrase (and it's not "lint" or "learning_plan"), read [wikify-query.md](wikify-query.md) and follow it exactly.
+3. **Query requested**: If the user's message reads as an information request about the wiki's contents — either (a) it ends in a question mark, or (b) it explicitly references wiki or domain content (e.g. names a page, topic, term, or concept and asks to find, explain, or look it up) — and it's not "lint" or "learning_plan", read [wikify-query.md](wikify-query.md) and follow it exactly. Do not route here for ordinary conversation or phrasing that merely resembles a question.
 
 4. **Init needed**: If `WIKI_SCHEMA.md` does not exist in the current directory, read [wikify-init.md](wikify-init.md) and follow it exactly.
 

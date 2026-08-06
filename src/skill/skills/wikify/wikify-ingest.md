@@ -35,6 +35,8 @@ Read the file using the appropriate method based on file extension:
 | Directories in `raw/repos/` | Read README.md first, then key source files |
 | Other | Report the file type and ask the user for a text summary or to convert it |
 
+**PDF dependency:** PDF ingestion requires an MCP server providing the `read_pdf_content` tool. This is an external dependency beyond the base Python 3 requirement. If that MCP tool is unavailable, report the gap to the user and ask whether to (a) convert the PDF to text/markdown first, or (b) skip the file and leave it flagged as unprocessed in `wiki/log.md`.
+
 ## Step 3: Detect Domain and Present Summary
 
 **First, detect the domain of the source material.**
@@ -55,6 +57,7 @@ After reading the source, present the user with:
 1. **Key Takeaways** — Comprehensive bullet list
 2. **Pages to create or update** — For each category in the wiki (from WIKI_SCHEMA.md), list every item from the source that belongs there, noting whether each is new or an update to an existing page. Be exhaustive. Flag any contradictions with existing wiki content inline as ⚠️ warnings.
 3. **Contradictions** — (only if any exist) A summary of claims that conflict with existing wiki pages and which raw sources support each side.
+4. **Excluded** — Named entities, claims, or topics noticed in the source that were NOT judged page-worthy (mentioned once, low relevance to established categories, below the exhaustiveness threshold, etc.). List each with a one-line reason for exclusion. This section must be shown to the user for review before ingest finalizes — the user can promote any excluded item to a real page at this point.
 
 Then ask: "Any additional context or direction for how to file this? Are there any items I missed?"
 
@@ -96,6 +99,12 @@ All pages must use lowercase kebab-case filenames and the full frontmatter schem
 - Updated: <cat>/existing-page.md (if applicable)
 ```
 
+**Append confirmed-excluded items to `wiki/excluded.md`**:
+- Take the items from the **Excluded** section of Step 3, as confirmed by the user (drop any the user chose to promote to real pages).
+- Create `wiki/excluded.md` if it does not exist, with a header explaining its purpose: "Items noticed during ingest but not compiled into dedicated wiki pages. Each entry links back to the raw source where it appears." This file is created lazily on first exclusion during Ingest (not during Init), so no init-time change is required.
+- This file lives inside `wiki/` (not `raw/`) so it is covered by the same search/lint/query surfaces as the rest of the wiki.
+- Format: one entry per excluded item — item name, source file (`raw/` path), one-line reason for exclusion, ingest date.
+
 ## Step 6: Cross-Reference Pass
 
 Read all pages created or modified during this ingest. For each page:
@@ -104,6 +113,8 @@ Read all pages created or modified during this ingest. For each page:
 2. For every page A that lists page B in `related:`, verify page B also lists page A
 3. If page B doesn't link back, edit page B to add page A to its `related:` list
 4. Update the `updated:` date on any page modified during this pass
+
+**Large ingest batches:** If more than ~15 pages were created or modified in one ingest run, process the cross-reference pass in sub-batches (e.g., groups of 10–15 pages) rather than holding all modified pages in context at once. This keeps the pass tractable at large-corpus scale.
 
 ## Step 7: Continue or Stop
 
