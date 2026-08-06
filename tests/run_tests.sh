@@ -23,6 +23,7 @@ run_test_file() {
   export FAILURES PASSES
 
   # Source helpers and the test file in a subshell-like scope
+  local exit_code=0
   (
     source "$SCRIPT_DIR/helpers.sh"
     FAILURES=0
@@ -30,8 +31,7 @@ run_test_file() {
     source "$test_file"
     echo "  ($PASSES passed, $FAILURES failed)"
     exit "$FAILURES"
-  )
-  local exit_code=$?
+  ) || exit_code=$?
 
   if [ "$exit_code" -gt 0 ]; then
     total_fail=$((total_fail + exit_code))
