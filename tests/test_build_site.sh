@@ -14,23 +14,24 @@ assert_contains "$SCRIPT" "d3" "script references d3"
 assert_contains "$SCRIPT" "website" "script references website directory"
 
 # --- Integration test: build a sample wiki and verify output ---
+# Category folder names equal the page `type` value (per the domain-aware
+# category design) except `sources/`, which always holds `type: source-summary`.
 TMPDIR_TEST=$(mktemp -d)
 WIKI_DIR="$TMPDIR_TEST/wiki"
 WEBSITE_DIR="$TMPDIR_TEST/website"
 
-# Create sample wiki structure
-mkdir -p "$WIKI_DIR/concepts" "$WIKI_DIR/entities" "$WIKI_DIR/sources" "$WIKI_DIR/comparisons"
+mkdir -p "$WIKI_DIR/concept" "$WIKI_DIR/entity" "$WIKI_DIR/sources" "$WIKI_DIR/comparison"
 
 # Create sample concept page
-cat > "$WIKI_DIR/concepts/machine-learning.md" << 'ENDOFFILE'
+cat > "$WIKI_DIR/concept/machine-learning.md" << 'ENDOFFILE'
 ---
 title: Machine Learning
 type: concept
 sources:
   - ../raw/articles/ml-intro.md
 related:
-  - entities/andrej-karpathy.md
-  - concepts/neural-networks.md
+  - entity/andrej-karpathy.md
+  - concept/neural-networks.md
 confidence: high
 created: 2026-04-15
 updated: 2026-04-15
@@ -48,7 +49,7 @@ Machine learning is a subset of artificial intelligence that focuses on building
 ENDOFFILE
 
 # Create sample entity page
-cat > "$WIKI_DIR/entities/andrej-karpathy.md" << 'ENDOFFILE'
+cat > "$WIKI_DIR/entity/andrej-karpathy.md" << 'ENDOFFILE'
 ---
 title: Andrej Karpathy
 type: entity
@@ -56,8 +57,8 @@ sources:
   - ../raw/articles/ml-intro.md
   - ../raw/articles/llm-wiki.md
 related:
-  - concepts/machine-learning.md
-  - concepts/neural-networks.md
+  - concept/machine-learning.md
+  - concept/neural-networks.md
 confidence: high
 created: 2026-04-15
 updated: 2026-04-15
@@ -69,15 +70,15 @@ Former director of AI at Tesla and researcher at OpenAI.
 ENDOFFILE
 
 # Create another concept to test connections
-cat > "$WIKI_DIR/concepts/neural-networks.md" << 'ENDOFFILE'
+cat > "$WIKI_DIR/concept/neural-networks.md" << 'ENDOFFILE'
 ---
 title: Neural Networks
 type: concept
 sources:
   - ../raw/articles/ml-intro.md
 related:
-  - concepts/machine-learning.md
-  - entities/andrej-karpathy.md
+  - concept/machine-learning.md
+  - entity/andrej-karpathy.md
 confidence: medium
 created: 2026-04-15
 updated: 2026-04-15
@@ -96,7 +97,7 @@ type: source-summary
 sources:
   - ../raw/articles/ml-intro.md
 related:
-  - concepts/machine-learning.md
+  - concept/machine-learning.md
 confidence: high
 created: 2026-04-15
 updated: 2026-04-15
@@ -108,14 +109,14 @@ Summary of the introductory article on machine learning.
 ENDOFFILE
 
 # Create a comparison page
-cat > "$WIKI_DIR/comparisons/supervised-vs-unsupervised.md" << 'ENDOFFILE'
+cat > "$WIKI_DIR/comparison/supervised-vs-unsupervised.md" << 'ENDOFFILE'
 ---
 title: Supervised vs Unsupervised Learning
 type: comparison
 sources:
   - ../raw/articles/ml-intro.md
 related:
-  - concepts/machine-learning.md
+  - concept/machine-learning.md
 confidence: medium
 created: 2026-04-15
 updated: 2026-04-15
@@ -137,14 +138,14 @@ cat > "$WIKI_DIR/index.md" << 'ENDOFFILE'
 - [Introduction to ML](sources/ml-intro.md) — type: source-summary, confidence: high
 
 ## Concepts
-- [Machine Learning](concepts/machine-learning.md) — type: concept, confidence: high
-- [Neural Networks](concepts/neural-networks.md) — type: concept, confidence: medium
+- [Machine Learning](concept/machine-learning.md) — type: concept, confidence: high
+- [Neural Networks](concept/neural-networks.md) — type: concept, confidence: medium
 
 ## Entities
-- [Andrej Karpathy](entities/andrej-karpathy.md) — type: entity, confidence: high
+- [Andrej Karpathy](entity/andrej-karpathy.md) — type: entity, confidence: high
 
 ## Comparisons
-- [Supervised vs Unsupervised Learning](comparisons/supervised-vs-unsupervised.md) — type: comparison, confidence: medium
+- [Supervised vs Unsupervised Learning](comparison/supervised-vs-unsupervised.md) — type: comparison, confidence: medium
 ENDOFFILE
 
 # Create overview.md
@@ -161,7 +162,7 @@ cat > "$WIKI_DIR/log.md" << 'ENDOFFILE'
 ## [2026-04-15] ingest | Introduction to ML
 - Source: raw/articles/ml-intro.md
 - Created: sources/ml-intro.md
-- Created: concepts/machine-learning.md
+- Created: concept/machine-learning.md
 ENDOFFILE
 
 # Run build script
@@ -174,10 +175,10 @@ assert_file_exists "$WEBSITE_DIR/data.json" "website/data.json generated"
 assert_file_exists "$WEBSITE_DIR/wiki-css.css" "website/wiki-css.css generated"
 assert_file_exists "$WEBSITE_DIR/graph.js" "website/graph.js generated"
 assert_file_exists "$WEBSITE_DIR/category.js" "website/category.js generated"
-assert_file_exists "$WEBSITE_DIR/categories/concepts.html" "categories/concepts.html generated"
-assert_file_exists "$WEBSITE_DIR/categories/entities.html" "categories/entities.html generated"
-assert_file_exists "$WEBSITE_DIR/categories/sources.html" "categories/sources.html generated"
-assert_file_exists "$WEBSITE_DIR/categories/comparisons.html" "categories/comparisons.html generated"
+assert_file_exists "$WEBSITE_DIR/categories/concept.html" "categories/concept.html generated"
+assert_file_exists "$WEBSITE_DIR/categories/entity.html" "categories/entity.html generated"
+assert_file_exists "$WEBSITE_DIR/categories/source-summary.html" "categories/source-summary.html generated"
+assert_file_exists "$WEBSITE_DIR/categories/comparison.html" "categories/comparison.html generated"
 assert_file_exists "$WEBSITE_DIR/pages/machine-learning.html" "pages/machine-learning.html generated"
 assert_file_exists "$WEBSITE_DIR/pages/andrej-karpathy.html" "pages/andrej-karpathy.html generated"
 assert_file_exists "$WEBSITE_DIR/pages/neural-networks.html" "pages/neural-networks.html generated"
@@ -193,6 +194,7 @@ assert_contains "$WEBSITE_DIR/data.json" '"concept"' "data.json contains concept
 assert_contains "$WEBSITE_DIR/data.json" '"entity"' "data.json contains entity type"
 assert_contains "$WEBSITE_DIR/data.json" '"tier"' "data.json contains tier field for node sizing"
 assert_contains "$WEBSITE_DIR/data.json" '"weight"' "data.json contains weight field for edges"
+assert_contains "$WEBSITE_DIR/data.json" '"typeColors"' "data.json contains a typeColors map for category coloring"
 
 # Verify index.html content
 assert_contains "$WEBSITE_DIR/index.html" "d3" "index.html loads D3"
@@ -204,12 +206,17 @@ assert_contains "$WEBSITE_DIR/graph.js" "contextmenu" "graph.js supports right-c
 assert_contains "$WEBSITE_DIR/graph.js" "forceSimulation\|force(" "graph.js uses D3 force simulation"
 assert_contains "$WEBSITE_DIR/graph.js" "tier" "graph.js uses tier for node sizing"
 assert_contains "$WEBSITE_DIR/graph.js" "weight" "graph.js uses weight for edge thickness"
-assert_contains "$WEBSITE_DIR/graph.js" "#4A90D9\|concept" "graph.js has concept color"
-assert_contains "$WEBSITE_DIR/graph.js" "#50C878\|entity" "graph.js has entity color"
+
+# Colors are assigned per-type at build time from a palette (categories are
+# user-defined, so colors can't be hardcoded by type name) and threaded
+# through data.json/data.js as WIKI_DATA.typeColors, not CSS custom properties.
+assert_contains "$WEBSITE_DIR/graph.js" "TYPE_COLORS" "graph.js reads a per-type color map"
+assert_contains "$WEBSITE_DIR/graph.js" "WIKI_DATA.typeColors" "graph.js sources colors from WIKI_DATA.typeColors"
+assert_contains "$WEBSITE_DIR/data.js" "typeColors" "data.js embeds the typeColors map for file:// use without a server"
 
 # Verify category pages
-assert_contains "$WEBSITE_DIR/categories/concepts.html" "Machine Learning" "concepts page lists Machine Learning"
-assert_contains "$WEBSITE_DIR/categories/entities.html" "Andrej Karpathy" "entities page lists Andrej Karpathy"
+assert_contains "$WEBSITE_DIR/categories/concept.html" "Machine Learning" "concept page lists Machine Learning"
+assert_contains "$WEBSITE_DIR/categories/entity.html" "Andrej Karpathy" "entity page lists Andrej Karpathy"
 
 # Verify individual pages
 assert_contains "$WEBSITE_DIR/pages/machine-learning.html" "Machine Learning" "ML page has title"
@@ -219,7 +226,6 @@ assert_contains "$WEBSITE_DIR/pages/machine-learning.html" "wiki-css.css" "ML pa
 # Verify wiki-css.css content (taste-skill design tokens)
 assert_contains "$WEBSITE_DIR/wiki-css.css" "Outfit" "wiki-css.css uses Outfit font"
 assert_contains "$WEBSITE_DIR/wiki-css.css" "--color-bg" "wiki-css.css has color-bg token"
-assert_contains "$WEBSITE_DIR/wiki-css.css" "--color-concept" "wiki-css.css has concept color token"
 assert_contains "$WEBSITE_DIR/wiki-css.css" "--font-sans" "wiki-css.css has font-sans token"
 assert_contains "$WEBSITE_DIR/wiki-css.css" "--ease-spring" "wiki-css.css has spring easing"
 assert_contains "$WEBSITE_DIR/wiki-css.css" "cubic-bezier" "wiki-css.css uses custom cubic-bezier"
@@ -231,9 +237,6 @@ echo "/* user customization */" >> "$WEBSITE_DIR/wiki-css.css"
 cd "$TMPDIR_TEST"
 "$SCRIPT" 2>/dev/null
 assert_contains "$WEBSITE_DIR/wiki-css.css" "user customization" "wiki-css.css preserved on rebuild"
-
-# Verify graph.js reads CSS custom properties
-assert_contains "$WEBSITE_DIR/graph.js" "getComputedStyle\|--color-concept" "graph.js reads colors from CSS tokens"
 
 # Clean up
 rm -rf "$TMPDIR_TEST"

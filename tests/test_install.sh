@@ -1,39 +1,32 @@
 # ABOUTME: Tests for install.sh and uninstall.sh scripts.
-# ABOUTME: Verifies install copies wikify.md and uninstall removes it.
+# ABOUTME: Verifies install copies the command and skill, and uninstall removes both.
 
 FAILURES=0
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 
-# Create a dummy src/wikify.md for now (will be replaced by real file later)
-if [ ! -f "$PROJECT_DIR/src/wikify.md" ]; then
-  mkdir -p "$PROJECT_DIR/src"
-  echo "---" > "$PROJECT_DIR/src/wikify.md"
-  echo "description: test placeholder" >> "$PROJECT_DIR/src/wikify.md"
-  echo "---" >> "$PROJECT_DIR/src/wikify.md"
-  CREATED_DUMMY=1
-fi
-
-# Set up temp install dir
-TMPDIR_INSTALL=$(mktemp -d)
-export WIKIFY_INSTALL_DIR="$TMPDIR_INSTALL"
+# Set up isolated temp install dirs
+TMPDIR_COMMANDS=$(mktemp -d)
+TMPDIR_SKILLS=$(mktemp -d)
+export WIKIFY_COMMANDS_DIR="$TMPDIR_COMMANDS"
+export WIKIFY_SKILLS_DIR="$TMPDIR_SKILLS/wikify"
 
 # Test install
 "$PROJECT_DIR/scripts/install.sh"
-assert_file_exists "$TMPDIR_INSTALL/wikify.md" "install.sh copies wikify.md to install dir"
+assert_file_exists "$TMPDIR_COMMANDS/wikify.md" "install.sh copies wikify.md to WIKIFY_COMMANDS_DIR"
+assert_file_exists "$WIKIFY_SKILLS_DIR/SKILL.md" "install.sh copies the skill to WIKIFY_SKILLS_DIR"
+assert_file_exists "$WIKIFY_SKILLS_DIR/scripts/build-site.sh" "install.sh copies build-site.sh into the skill's scripts/ dir"
 
 # Test that installed file has frontmatter
-assert_first_line "$TMPDIR_INSTALL/wikify.md" "---" "installed file starts with YAML frontmatter"
+assert_first_line "$TMPDIR_COMMANDS/wikify.md" "---" "installed command file starts with YAML frontmatter"
 
 # Test uninstall
 "$PROJECT_DIR/scripts/uninstall.sh"
-assert_file_not_exists "$TMPDIR_INSTALL/wikify.md" "uninstall.sh removes wikify.md"
+assert_file_not_exists "$TMPDIR_COMMANDS/wikify.md" "uninstall.sh removes wikify.md"
+assert_file_not_exists "$WIKIFY_SKILLS_DIR/SKILL.md" "uninstall.sh removes the skill directory"
 
 # Test uninstall is idempotent (doesn't error on missing file)
 "$PROJECT_DIR/scripts/uninstall.sh"
-assert_file_not_exists "$TMPDIR_INSTALL/wikify.md" "uninstall.sh handles already-removed file"
+assert_file_not_exists "$TMPDIR_COMMANDS/wikify.md" "uninstall.sh handles already-removed file"
 
 # Clean up
-rm -rf "$TMPDIR_INSTALL"
-if [ "${CREATED_DUMMY:-0}" = "1" ]; then
-  rm -f "$PROJECT_DIR/src/wikify.md"
-fi
+rm -rf "$TMPDIR_COMMANDS" "$TMPDIR_SKILLS"

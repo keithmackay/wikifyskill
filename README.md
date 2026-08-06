@@ -61,7 +61,7 @@ This copies:
 To install to a custom location:
 
 ```bash
-WIKIFY_INSTALL_DIR=~/.config/claude/commands ./scripts/install.sh
+WIKIFY_COMMANDS_DIR=~/.config/claude/commands WIKIFY_SKILLS_DIR=~/.config/claude/skills/wikify ./scripts/install.sh
 ```
 
 ### Uninstall
