@@ -12,10 +12,9 @@ assert_contains "$SKILL" "raw/repos" "Init creates raw/repos"
 assert_contains "$SKILL" "raw/data" "Init creates raw/data"
 assert_contains "$SKILL" "raw/images" "Init creates raw/images"
 assert_contains "$SKILL" "raw/assets" "Init creates raw/assets"
-assert_contains "$SKILL" "wiki/concepts" "Init creates wiki/concepts"
-assert_contains "$SKILL" "wiki/entities" "Init creates wiki/entities"
 assert_contains "$SKILL" "wiki/sources" "Init creates wiki/sources"
-assert_contains "$SKILL" "wiki/comparisons" "Init creates wiki/comparisons"
+assert_contains "$SKILL" "category list" "Init derives categories from domain content, not fixed names"
+assert_contains "$SKILL" "wiki/<cat1>" "Init creates a wiki subfolder per chosen category"
 
 # Schema and special files
 assert_contains "$SKILL" "WIKI_SCHEMA.md" "Init creates WIKI_SCHEMA.md"

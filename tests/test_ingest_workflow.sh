@@ -26,9 +26,8 @@ assert_contains "$SKILL" "context\|direction" "Ingest asks for user context"
 
 # Page creation
 assert_contains "$SKILL" "wiki/sources/" "Ingest creates source summary pages"
-assert_contains "$SKILL" "wiki/concepts/" "Ingest creates/updates concept pages"
-assert_contains "$SKILL" "wiki/entities/" "Ingest creates/updates entity pages"
-assert_contains "$SKILL" "wiki/comparisons/" "Ingest creates comparison pages"
+assert_contains "$SKILL" "category map" "Ingest creates/updates pages using the category map from WIKI_SCHEMA.md"
+assert_contains "$SKILL" "wiki/<folder>/" "Ingest places pages under the chosen category folders"
 assert_contains "$SKILL" "type:" "Ingest uses type frontmatter field"
 assert_contains "$SKILL" "updated:" "Ingest tracks updated date"
 

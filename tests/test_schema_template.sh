@@ -1,11 +1,11 @@
-# ABOUTME: Tests that src/templates/WIKI_SCHEMA.md contains all required sections.
+# ABOUTME: Tests that wikify.md's WIKI_SCHEMA.md generation instructions cover all required sections.
 # ABOUTME: Verifies page types, frontmatter fields, naming conventions, and special files.
 
 FAILURES=0
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-SCHEMA="$PROJECT_DIR/src/templates/WIKI_SCHEMA.md"
+SCHEMA="$PROJECT_DIR/src/wikify.md"
 
-assert_file_exists "$SCHEMA" "WIKI_SCHEMA.md template exists"
+assert_file_exists "$SCHEMA" "wikify.md exists"
 assert_contains "$SCHEMA" "source-summary" "schema defines source-summary page type"
 assert_contains "$SCHEMA" "concept" "schema defines concept page type"
 assert_contains "$SCHEMA" "entity" "schema defines entity page type"
