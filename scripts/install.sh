@@ -6,6 +6,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SRC_DIR="$SCRIPT_DIR/../src"
+CANONICAL_BUILD_SITE="$SCRIPT_DIR/build-site.sh"
 
 COMMANDS_DIR="${WIKIFY_COMMANDS_DIR:-$HOME/.claude/commands}"
 SKILLS_DIR="${WIKIFY_SKILLS_DIR:-$HOME/.claude/skills/wikify}"
@@ -29,5 +30,9 @@ fi
 mkdir -p "$SKILLS_DIR"
 cp -r "$SRC_DIR/skill/." "$SKILLS_DIR/"
 mkdir -p "$SKILLS_DIR/scripts"
-cp "$SRC_DIR/build-site.sh" "$SKILLS_DIR/scripts/build-site.sh"
+if [ ! -f "$CANONICAL_BUILD_SITE" ]; then
+  echo "Error: canonical scripts/build-site.sh not found at $CANONICAL_BUILD_SITE"
+  exit 1
+fi
+cp "$CANONICAL_BUILD_SITE" "$SKILLS_DIR/scripts/build-site.sh"
 echo "Installed skill to $SKILLS_DIR/"
