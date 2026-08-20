@@ -18,19 +18,21 @@ Examine the current working directory to determine which workflow to run. Use th
 
 **Check these conditions in order:**
 
-1. **Lint requested**: If the user's message contains the word "lint", read [wikify-lint.md](wikify-lint.md) and follow it exactly.
+1. **Help requested**: If the user's message contains `--help`, do not run any workflow. Instead, read and display the contents of `help.md` (in this skill's folder) verbatim, then stop.
 
-2. **Learning plan requested**: If the user's message contains "learning_plan" or "learning plan", read [wikify-learning-plan.md](wikify-learning-plan.md) and follow it exactly.
+3. **Lint requested**: If the user's message contains the word "lint", read [wikify-lint.md](wikify-lint.md) and follow it exactly.
 
-3. **Query requested**: If the user's message contains a question or search phrase (and it's not "lint" or "learning_plan"), read [wikify-query.md](wikify-query.md) and follow it exactly.
+4. **Learning plan requested**: If the user's message contains "learning_plan" or "learning plan", read [wikify-learning-plan.md](wikify-learning-plan.md) and follow it exactly.
 
-4. **Init needed**: If `WIKI_SCHEMA.md` does not exist in the current directory, read [wikify-init.md](wikify-init.md) and follow it exactly.
+5. **Query requested**: If the user's message contains a question or search phrase (and it's not "lint" or "learning_plan"), read [wikify-query.md](wikify-query.md) and follow it exactly.
 
-5. **Inconsistent state**: If only one of `raw/` or `wiki/` exists (but not both), warn the user: "Found [raw/|wiki/] but not [wiki/|raw/]. This looks like an incomplete setup. Would you like to run Init to fix this?" If yes, read [wikify-init.md](wikify-init.md) and follow it exactly.
+6. **Init needed**: If `WIKI_SCHEMA.md` does not exist in the current directory, read [wikify-init.md](wikify-init.md) and follow it exactly.
 
-6. **Ingest available**: If both `raw/` and `wiki/` exist, scan for unprocessed files (see Ingest Step 1 in [wikify-ingest.md](wikify-ingest.md)). If new files are found, read [wikify-ingest.md](wikify-ingest.md) and follow it exactly.
+7. **Inconsistent state**: If only one of `raw/` or `wiki/` exists (but not both), warn the user: "Found [raw/|wiki/] but not [wiki/|raw/]. This looks like an incomplete setup. Would you like to run Init to fix this?" If yes, read [wikify-init.md](wikify-init.md) and follow it exactly.
 
-7. **Nothing to do**: If both directories exist and all files are processed, present this menu:
+8. **Ingest available**: If both `raw/` and `wiki/` exist, scan for unprocessed files (see Ingest Step 1 in [wikify-ingest.md](wikify-ingest.md)). If new files are found, read [wikify-ingest.md](wikify-ingest.md) and follow it exactly.
+
+9. **Nothing to do**: If both directories exist and all files are processed, present this menu:
    - "All sources are processed. What would you like to do?"
    - **Query**: "Ask a question about the wiki"
    - **Lint**: "Run a health check"
