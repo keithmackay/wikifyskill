@@ -300,6 +300,10 @@ See [docs/TESTING_GUIDELINES.md](docs/TESTING_GUIDELINES.md) for guidance on wri
 
 Contributions are welcome — fork the repo, create a branch, and open a PR. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full development workflow, PR process, and code style conventions.
 
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for release history.
+
 ## License
 
 [MIT](LICENSE)
