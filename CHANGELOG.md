@@ -6,6 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+- Add Changelog section to README linking CHANGELOG.md
 ### Added
 
 - `wiki/excluded.md` — tracks items noticed during Ingest but not compiled into dedicated pages, so nothing is silently lost; Query offers an on-demand raw-source read when a question touches an excluded item, with the time/token/quality tradeoff stated up front
