@@ -72,6 +72,13 @@ WIKIFY_COMMANDS_DIR=~/.config/claude/commands WIKIFY_SKILLS_DIR=~/.config/claude
 
 ## Installation
 
+### From the mackayi marketplace (recommended)
+
+```
+/plugin marketplace add keithmackay/mackayi
+/plugin install wikify@mackayi
+```
+
 ### Claude Code
 
 ```bash
