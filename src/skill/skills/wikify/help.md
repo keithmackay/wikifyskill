@@ -19,6 +19,9 @@ USAGE
   "learning plan"           Generate a learning plan from the wiki
   <a question>              Query the compiled wiki
   --help                    Show this message and exit
+  --dry-run                 Preview what would be created/updated
+                             (pages, schema, index/log entries)
+                             without writing any file
 
 OTHER TOOLS
   scripts/build-site.sh     Renders the wiki into a static website.
@@ -26,4 +29,8 @@ OTHER TOOLS
                              python3 ~/.claude/skills/wikify/scripts/build-site.sh wiki website
 
 FLAGS
-  --help    Show this help message without making any changes
+  --help      Show this help message without making any changes
+  --dry-run   Run the normal detection and analysis for whichever
+              workflow applies (Init, Ingest, Lint, or Learning Plan),
+              then report what would be created or updated instead of
+              writing anything
